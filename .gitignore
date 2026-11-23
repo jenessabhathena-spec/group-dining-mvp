@@ -1,0 +1,16 @@
+# Data and secrets: never commit
+*.sqlite
+*.sqlite-*
+backups/
+.env
+.env.*
+!deploy/.env.example
+deploy/.env
+deploy/restaurants.csv
+
+# Tooling
+node_modules/
+.vercel/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Group Dining MVP - Prototype</title>
+<style>
+  :root{--bg:#f4f1ec;--card:#fff;--ink:#1d1b19;--mute:#6b665f;--line:#e5dfd6;--acc:#d9531e;--acc2:#fbe9e0;--ok:#237a4b;--warn:#a05a00}
+  @media (prefers-color-scheme:dark){:root{--bg:#171513;--card:#232019;--ink:#f3eee7;--mute:#a39c92;--line:#3a352d;--acc:#ff7a45;--acc2:#3a261b;--ok:#5fcf93;--warn:#f0b35c}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{display:flex;gap:24px;justify-content:center;align-items:flex-start;padding:20px 16px;flex-wrap:wrap}
+  .side{width:300px;max-width:100%}
+  .side h1{font-size:18px;margin:0 0 4px}
+  .side p{color:var(--mute);margin:0 0 12px;font-size:13px}
+  .nav button{display:flex;gap:8px;width:100%;text-align:left;padding:7px 10px;margin:0 0 4px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;cursor:pointer;font-size:13px}
+  .nav button.on{border-color:var(--acc);background:var(--acc2)}
+  .nav b{color:var(--mute);width:18px;display:inline-block}
+  .nav small{color:var(--mute);margin-left:auto}
+  details{margin-top:12px;font-size:12px;color:var(--mute)}
+  pre{white-space:pre-wrap;word-break:break-word;background:var(--card);border:1px solid var(--line);padding:8px;border-radius:8px;max-height:260px;overflow:auto;font-size:11px}
+  .phone{width:360px;max-width:100%;height:700px;background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:0 8px 30px rgba(0,0,0,.12);display:flex;flex-direction:column;overflow:hidden}
+  .top{padding:10px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;font-weight:600}
+  .top .as{margin-left:auto;font-weight:400;font-size:12px;color:var(--mute)}
+  .body{padding:14px 16px;overflow:auto;flex:1}
+  h2{font-size:19px;margin:0 0 4px}
+  .sub{color:var(--mute);font-size:13px;margin:0 0 12px}
+  label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}
+  input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font-size:15px}
+  .btn{display:block;width:100%;padding:12px;margin-top:12px;border:0;border-radius:12px;background:var(--acc);color:#fff;font-weight:600;font-size:15px;cursor:pointer;text-align:center;text-decoration:none}
+  .btn.sec{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+  .btn.sm{padding:8px;font-size:13px;margin-top:6px}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{padding:6px 10px;border:1px solid var(--line);border-radius:99px;background:var(--bg);color:var(--ink);cursor:pointer;font-size:13px}
+  .chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+  .card{border:1px solid var(--line);border-radius:14px;padding:12px;margin:0 0 10px;background:var(--bg)}
+  .card h3{margin:0;font-size:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .badge{font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--acc2);color:var(--acc)}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  .why{margin:6px 0;font-size:13px}
+  .trav{font-size:12px;color:var(--mute);margin:4px 0}
+  .trade{font-size:12px;color:var(--warn);margin:4px 0}
+  .ok{color:var(--ok)}.mute{color:var(--mute);font-size:13px}
+  .person{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;font-size:13px;max-width:90vw}
+  .stars button{font-size:22px;background:none;border:0;cursor:pointer;color:var(--line);padding:0 2px}
+  .stars button.on{color:#f0a500}
+  .note{background:var(--acc2);border-radius:10px;padding:8px 10px;font-size:12px;margin:8px 0}
+  .consent{font-size:11px;color:var(--mute);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="side">
+    <h1>Group Dining MVP</h1>
+    <p>Clickable prototype of the PRD's 10 screens. The fair-pick engine and vote/veto logic are the real code from <code>src/</code>. Restaurants are fictional sample data.</p>
+    <div class="nav" id="nav"></div>
+    <details><summary>What other browsers receive (budget secrecy check)</summary><pre id="payload">Generate picks first.</pre></details>
+    <details><summary>Plan log (A2)</summary><pre id="planlog">Nothing yet.</pre></details>
+  </div>
+  <div class="phone"><div class="top" id="top"></div><div class="body" id="body"></div></div>
+</div>
+<div id="toastHost"></div>
+
+<script>
+// SAMPLE DATA ONLY. Restaurant names are fictional placeholders so nothing here is mistaken for real
+// listings. Replace with the curated 50-100 place list from the curation tool (A1).
+
+const AREAS = {
+  Koramangala: { lat: 12.9352, lng: 77.6245 },
+  "HSR Layout": { lat: 12.9116, lng: 77.6474 },
+  Indiranagar: { lat: 12.9784, lng: 77.6408 },
+  Domlur: { lat: 12.9609, lng: 77.6387 },
+  "BTM Layout": { lat: 12.9166, lng: 77.6101 },
+  Jayanagar: { lat: 12.925, lng: 77.5938 },
+  Marathahalli: { lat: 12.9569, lng: 77.7011 },
+};
+
+const loc = (area, dLat = 0, dLng = 0) => ({
+  area,
+  lat: AREAS[area].lat + dLat,
+  lng: AREAS[area].lng + dLng,
+});
+
+const h = (open, close) => ({ open, close });
+// Same hours every day except one closed day (weekly format, see isOpen in engine.js).
+const closedOn = (day, open, close) => ({
+  weekly: Object.fromEntries(["sun", "mon", "tue", "wed", "thu", "fri", "sat"].map((d) => [d, d === day ? [] : [[open, close]]])),
+});
+
+const RESTAURANTS = [
+  { id: "r01", name: "Sample Tandoor House", ...loc("Koramangala", 0.002, 0.003), pricePerHead: 900, cuisines: ["north-indian", "mughlai"], dietOptions: ["veg", "non-veg"], vibes: ["lively", "chill"], maxGroup: 10, alcohol: "serves", noise: "medium", hours: h("12:00", "23:30"), partner: true, rating: 4.2 },
+  { id: "r02", name: "Sample Dosa Lane", ...loc("Koramangala", -0.004, 0.001), pricePerHead: 350, cuisines: ["south-indian"], dietOptions: ["veg", "vegan", "jain"], vibes: ["quick", "chill"], maxGroup: 8, alcohol: "none", noise: "medium", hours: h("07:00", "22:30"), partner: false, rating: 4.4 },
+  { id: "r03", name: "Sample Noodle Bar", ...loc("Indiranagar", 0.003, -0.002), pricePerHead: 1100, cuisines: ["pan-asian", "japanese"], dietOptions: ["veg", "non-veg"], vibes: ["lively", "fancy"], maxGroup: 8, alcohol: "serves", noise: "loud", hours: h("12:00", "23:00"), partner: false, rating: 4.5 },
+  { id: "r04", name: "Sample Wood-fired Pizza", ...loc("Indiranagar", -0.002, 0.004), pricePerHead: 1000, cuisines: ["italian"], dietOptions: ["veg", "non-veg"], vibes: ["chill", "lively"], maxGroup: 12, alcohol: "serves", noise: "medium", hours: h("12:00", "23:30"), partner: true, rating: 4.1 },
+  { id: "r05", name: "Sample Thali Kitchen", ...loc("HSR Layout", 0.003, 0.002), pricePerHead: 450, cuisines: ["gujarati", "north-indian"], dietOptions: ["veg", "jain"], vibes: ["quick", "chill"], maxGroup: 12, alcohol: "none", noise: "medium", hours: closedOn("mon", "11:30", "22:30"), partner: false, rating: 4.3 },
+  { id: "r06", name: "Sample Brew & Bites", ...loc("HSR Layout", -0.003, -0.003), pricePerHead: 800, cuisines: ["continental", "cafe"], dietOptions: ["veg", "vegan", "non-veg"], vibes: ["chill"], maxGroup: 8, alcohol: "serves", noise: "quiet", hours: h("09:00", "23:00"), partner: false, rating: 4.0 },
+  { id: "r07", name: "Sample Biryani Co.", ...loc("Koramangala", 0.005, -0.004), pricePerHead: 600, cuisines: ["hyderabadi", "mughlai"], dietOptions: ["veg", "non-veg"], vibes: ["quick", "lively"], maxGroup: 10, alcohol: "none", noise: "medium", hours: h("11:00", "23:59"), partner: false, rating: 4.2 },
+  { id: "r08", name: "Sample Rooftop Grill", ...loc("Indiranagar", 0.006, 0.001), pricePerHead: 1600, cuisines: ["grill", "continental"], dietOptions: ["veg", "non-veg"], vibes: ["fancy", "lively"], maxGroup: 10, alcohol: "bar", noise: "loud", hours: h("17:00", "01:00"), partner: true, rating: 4.4 },
+  { id: "r09", name: "Sample Coastal Kitchen", ...loc("HSR Layout", 0.001, 0.006), pricePerHead: 1050, cuisines: ["coastal", "seafood"], dietOptions: ["veg", "non-veg"], vibes: ["chill", "fancy"], maxGroup: 8, alcohol: "serves", noise: "medium", hours: h("12:00", "23:00"), partner: false, rating: 4.3 },
+  { id: "r10", name: "Sample Vegan Table", ...loc("Koramangala", -0.001, -0.006), pricePerHead: 750, cuisines: ["vegan", "continental"], dietOptions: ["veg", "vegan", "jain"], vibes: ["chill", "quiet"], maxGroup: 6, alcohol: "none", noise: "quiet", hours: h("10:00", "22:00"), partner: false, rating: 4.1 },
+  { id: "r11", name: "Sample Street Chaat Club", ...loc("Indiranagar", -0.005, -0.005), pricePerHead: 300, cuisines: ["street-food", "north-indian"], dietOptions: ["veg", "jain"], vibes: ["quick", "lively"], maxGroup: 10, alcohol: "none", noise: "loud", hours: h("16:00", "23:00"), partner: false, rating: 4.0 },
+  { id: "r12", name: "Sample Dim Sum House", ...loc("HSR Layout", -0.005, 0.002), pricePerHead: 950, cuisines: ["chinese", "pan-asian"], dietOptions: ["veg", "non-veg"], vibes: ["lively", "chill"], maxGroup: 10, alcohol: "serves", noise: "medium", hours: h("12:00", "23:00"), partner: false, rating: 4.2 },
+  { id: "r13", name: "Sample Late-night Diner", ...loc("Koramangala", 0.004, 0.006), pricePerHead: 650, cuisines: ["american", "cafe"], dietOptions: ["veg", "non-veg"], vibes: ["quick", "lively"], maxGroup: 8, alcohol: "none", noise: "medium", hours: h("18:00", "02:00"), partner: false, rating: 3.9 },
+  { id: "r14", name: "Sample Fine Dine South", ...loc("Indiranagar", 0.001, 0.007), pricePerHead: 1800, cuisines: ["south-indian", "kerala"], dietOptions: ["veg", "non-veg"], vibes: ["fancy", "quiet"], maxGroup: 8, alcohol: "serves", noise: "quiet", hours: closedOn("mon", "12:00", "23:00"), partner: false, rating: 4.6 },
+];
+
+// Fair-pick engine (PRD section 6): transparent rules, no ML.
+// Pure functions. Travel-time lookup is injected so Google Maps can replace the fallback later.
+
+const DEFAULT_WEIGHTS = { taste: 1, fairness: 1, mood: 1, novelty: 1, quality: 1 };
+const DEFAULTS = {
+  travelLimitMin: 40,
+  travelRelaxStepMin: 10,
+  travelRelaxMaxSteps: 3,
+  budgetRelaxSteps: [1.05, 1.1, 1.15], // up to 15% over the lowest budget
+  pickCount: 3,
+  smallGroupMax: 3, // groups of 2-3: no budget relaxation, generic budget labels (budget secrecy)
+};
+
+// ---------- travel ----------
+
+function haversineKm(a, b) {
+  const R = 6371;
+  const rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// Straight-line fallback (PRD section 8, Reliability). Road factor + rough Bengaluru speeds.
+function fallbackTravelMinutes(from, to, hour) {
+  const peak = (hour >= 8 && hour < 11) || (hour >= 17 && hour < 22);
+  const kmh = peak ? 14 : 24;
+  return Math.round(((haversineKm(from, to) * 1.4) / kmh) * 60) + 5;
+}
+
+// ---------- helpers ----------
+
+const toMin = (t) => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + (m || 0);
+};
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+const round2 = (x) => Math.round(x * 100) / 100;
+
+// ---------- opening hours ----------
+// hours is either { open, close } (same every day) or { weekly: { mon: [["12:00","15:00"],["19:00","23:00"]], ... } }.
+// A window that closes after midnight ("17:00"-"01:00") belongs to the day it opens on.
+const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+function dayOf(date) {
+  const [y, m, d] = date.split("-").map(Number);
+  return DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+}
+const windowsOn = (r, day) => (r.hours.weekly ? r.hours.weekly[day] || [] : [[r.hours.open, r.hours.close]]);
+
+// With a date, the day of the week counts (closed on Mondays means closed on Mondays). Without one the
+// weekday is unknown, so a place counts as open if it is open at that time on any day.
+function isOpen(restaurant, time, date) {
+  const x = toMin(time);
+  const days = date ? [dayOf(date)] : DAYS;
+  return days.some((day) => {
+    const prev = DAYS[(DAYS.indexOf(day) + 6) % 7];
+    const today = windowsOn(restaurant, day).some(([o, c]) => {
+      const O = toMin(o), C = toMin(c);
+      return C > O ? x >= O && x < C : x >= O; // wrapping window: open from O until midnight today
+    });
+    const spill = windowsOn(restaurant, prev).some(([o, c]) => {
+      const O = toMin(o), C = toMin(c);
+      return C <= O && x < C; // yesterday's late window still open after midnight
+    });
+    return today || spill;
+  });
+}
+
+const NOISE_RANK = { quiet: 0, medium: 1, loud: 2 };
+
+const DEALBREAKERS = {
+  "needs-veg": (r) => !r.dietOptions.includes("veg"),
+  "needs-vegan": (r) => !r.dietOptions.includes("vegan"),
+  "needs-jain": (r) => !r.dietOptions.includes("jain"),
+  "no-alcohol": (r) => r.alcohol === "bar",
+  "no-loud": (r) => r.noise === "loud",
+};
+
+function profileToMember(m) {
+  const p = m.profile;
+  return {
+    name: m.name,
+    start: p.start,
+    budget: null,
+    dealbreakers: p.dealbreakers || [],
+    mood: null,
+    cuisines: p.cuisines || [],
+    visited: p.visited || [],
+    fromProfile: true,
+  };
+}
+
+// ---------- stage 1 + 2: filters ----------
+
+function evaluate(r, members, groupSize, plan, ceiling, travelFn) {
+  const hard = [];
+  if (!isOpen(r, plan.time, plan.date)) hard.push({ rule: "closed", detail: "Closed at the plan time" });
+  for (const m of members) {
+    for (const d of m.dealbreakers || []) {
+      if (DEALBREAKERS[d] && DEALBREAKERS[d](r)) {
+        hard.push({ rule: "dealbreaker", detail: "Breaks a dealbreaker" });
+        break;
+      }
+    }
+    if (hard.some((h) => h.rule === "dealbreaker")) break;
+  }
+  if (groupSize > r.maxGroup) hard.push({ rule: "seating", detail: "Cannot seat the group" });
+  // Couples mode filters (F12): noise ceiling and ambience, both optional.
+  const f = plan.filters || {};
+  if (f.maxNoise && NOISE_RANK[r.noise] > NOISE_RANK[f.maxNoise]) hard.push({ rule: "noise", detail: "Louder than wanted" });
+  if (f.ambience && f.ambience.length && !r.vibes.some((v) => f.ambience.includes(v))) hard.push({ rule: "ambience", detail: "Not the ambience wanted" });
+  if (hard.length) return { r, hard, times: null };
+
+  // One travel lookup per member per candidate, only after the hard filters (cost control).
+  const hour = Number(plan.time.split(":")[0]);
+  const times = members.map((m) => ({ name: m.name, minutes: travelFn(m.start, r, hour) }));
+  const worst = times.reduce((a, b) => (b.minutes > a.minutes ? b : a));
+  return {
+    r,
+    hard,
+    times,
+    worst,
+    budgetRatio: r.pricePerHead / ceiling, // Infinity ceiling -> 0
+  };
+}
+
+// ---------- stage 3: scoring ----------
+
+function scoreRestaurant(r, members, times, limit, weights) {
+  const n = members.length;
+  const tasteHits = [];
+  let taste = 0;
+  for (const m of members) {
+    if (!m.cuisines || m.cuisines.length === 0) taste += 0.5;
+    else if (r.cuisines.some((c) => m.cuisines.includes(c))) {
+      taste += 1;
+      tasteHits.push(m);
+    }
+  }
+  taste /= n;
+
+  const minutes = times.map((t) => t.minutes);
+  const spread = Math.max(...minutes) - Math.min(...minutes);
+  const fairness = clamp01(1 - spread / limit);
+
+  // A member's mood may be one vibe or several (taste profile); any match counts.
+  let mood = 0;
+  const moodHits = [];
+  const vibeCount = {};
+  for (const m of members) {
+    const moods = [].concat(m.mood || []);
+    if (!moods.length) mood += 0.5;
+    else {
+      const hit = moods.find((v) => r.vibes.includes(v));
+      if (hit) {
+        mood += 1;
+        moodHits.push(m);
+        vibeCount[hit] = (vibeCount[hit] || 0) + 1;
+      }
+    }
+  }
+  mood /= n;
+  const moodVibe = Object.entries(vibeCount).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]?.[0];
+
+  const newFor = members.filter((m) => !(m.visited || []).includes(r.id));
+  const novelty = newFor.length / n;
+  const quality = clamp01((r.rating - 1) / 4);
+
+  const factors = { taste, fairness, mood, novelty, quality };
+  const wsum = Object.values(weights).reduce((a, b) => a + b, 0);
+  const total = Object.keys(factors).reduce((s, k) => s + factors[k] * weights[k], 0) / wsum;
+  return {
+    factors: Object.fromEntries(Object.entries(factors).map(([k, v]) => [k, round2(v)])),
+    total: round2(total),
+    _hits: { taste: tasteHits.length, mood: moodHits.length, novelty: newFor.length, moodVibe },
+  };
+}
+
+const byRank = (a, b) =>
+  b.total - a.total || b.factors.fairness - a.factors.fairness || (a.r.id < b.r.id ? -1 : 1);
+
+// ---------- stage 4: diversity ----------
+
+function selectDiverse(ranked, count) {
+  const chosen = [];
+  const same = (a, b) => a.r.cuisines[0] === b.r.cuisines[0] && a.r.vibes[0] === b.r.vibes[0];
+  for (const c of ranked) {
+    if (chosen.length === count) break;
+    if (!chosen.some((s) => same(s, c))) chosen.push(c);
+  }
+  for (const c of ranked) {
+    if (chosen.length === count) break;
+    if (!chosen.includes(c)) chosen.push(c);
+  }
+  return chosen.sort(byRank);
+}
+
+// ---------- stage 5: explain ----------
+
+function explain(c, members, budgetRelaxed) {
+  const parts = [];
+  const n = members.length;
+  const solo = n === 1; // "find something new" speaks to one person
+  const withBudget = members.filter((m) => m.budget != null).length;
+  if (withBudget > 0) {
+    // Only claim "all N" when everyone gave a budget; otherwise say what is true.
+    const everyone = withBudget === n;
+    parts.push(budgetRelaxed ? "Slightly above the shared budget" : solo ? "Within your budget" : everyone ? `Fits all ${withBudget} budgets` : withBudget === 1 ? "Within the budget given" : `Within the ${withBudget} budgets given`);
+  }
+  parts.push(solo ? `${c.worst.minutes} min away` : `longest trip ${c.worst.minutes} min (${c.worst.name})`);
+
+  const opts = [];
+  if (c._hits.taste > 0) {
+    const cuisine = c.r.cuisines.find((cu) => members.some((m) => (m.cuisines || []).includes(cu)));
+    opts.push({ v: c.factors.taste, t: solo ? `your kind of food: ${cuisine}` : `${c._hits.taste} of ${n} wanted ${cuisine}`, o: 0 });
+  }
+  if (c._hits.novelty > 0) opts.push({ v: c.factors.novelty, t: solo ? "new to you" : `new for ${c._hits.novelty}`, o: 1 });
+  if (c._hits.mood > 0)
+    opts.push({ v: c.factors.mood, t: solo ? `fits your ${c._hits.moodVibe} mood` : `${c._hits.mood} of ${n} in the mood for ${c._hits.moodVibe}`, o: 2 });
+  opts.sort((a, b) => b.v - a.v || a.o - b.o);
+  for (const o of opts.slice(0, 2)) parts.push(o.t);
+  const line = parts.join(" · ");
+  return line.charAt(0).toUpperCase() + line.slice(1);
+}
+
+// ---------- main ----------
+
+/**
+ * @param input {
+ *   plan: { time:'20:00', travelLimitMin? },
+ *   members: [{ name, start:{lat,lng}, budget, dealbreakers, mood, cuisines, visited }],
+ *   unanswered?: [{ name, profile? }],
+ *   restaurants: [...],
+ *   weights?, travelFn?
+ * }
+ */
+function generatePicks(input) {
+  const { plan, restaurants } = input;
+  const weights = { ...DEFAULT_WEIGHTS, ...(input.weights || {}) };
+  const baseLimit = plan.travelLimitMin ?? DEFAULTS.travelLimitMin;
+  const notes = [];
+
+  const answered = input.members;
+  const fromProfile = [];
+  for (const u of input.unanswered || []) {
+    if (u.profile) {
+      fromProfile.push(profileToMember(u));
+      notes.push(`Used ${u.name}'s saved profile (no answer yet)`);
+    } else {
+      notes.push(`Planned without ${u.name}`);
+    }
+  }
+  const members = [...answered, ...fromProfile];
+  const groupSize = members.length + (input.unanswered || []).filter((u) => !u.profile).length;
+
+  const budgets = members.map((m) => m.budget).filter((b) => b != null);
+  const baseCeiling = budgets.length ? Math.min(...budgets) : Infinity;
+  // Budget secrecy in small groups (2-3 people): saying a place is "above the shared budget", or stretching the
+  // budget and saying so, tells a member roughly what another member's budget is. So in small groups the budget
+  // is never relaxed, and budget near misses get a generic label. (Solo: it's your own budget, no secret.)
+  const smallGroup = groupSize >= 2 && groupSize <= DEFAULTS.smallGroupMax;
+  // For the "₹800-1,200 a head works for all" line (PRD content rules): did everyone in the plan give a budget?
+  const missing = (input.unanswered || []).some((u) => !u.profile);
+  const budgetScope = !budgets.length ? "none" : budgets.length === members.length && !missing ? "all" : "given";
+
+  // Travel: injected fn with straight-line fallback if it throws.
+  let travelFallback = false;
+  const userFn = input.travelFn || fallbackTravelMinutes;
+  const travelFn = (a, b, h) => {
+    try {
+      return userFn(a, b, h);
+    } catch {
+      travelFallback = true;
+      return fallbackTravelMinutes(a, b, h);
+    }
+  };
+  if (!input.travelFn) travelFallback = true;
+
+  const evals = restaurants.map((r) => evaluate(r, members, groupSize, plan, baseCeiling, travelFn));
+  // Checked after the lookups: the service may fail part-way through.
+  if (travelFallback) notes.push("Travel times are straight-line estimates");
+  const candidates = evals.filter((e) => e.hard.length === 0);
+
+  const passing = (mul, limit) =>
+    candidates.filter((e) => e.budgetRatio <= mul && e.worst.minutes <= limit);
+
+  // Relaxation order: travel limit first, then budget ceiling up to +15%.
+  let limit = baseLimit;
+  let budgetMul = 1;
+  let passes = passing(budgetMul, limit);
+  let relaxation = null;
+  if (passes.length === 0) {
+    const steps = [];
+    for (let i = 1; i <= DEFAULTS.travelRelaxMaxSteps; i++)
+      steps.push({ limit: baseLimit + i * DEFAULTS.travelRelaxStepMin, mul: 1 });
+    const maxLimit = baseLimit + DEFAULTS.travelRelaxMaxSteps * DEFAULTS.travelRelaxStepMin;
+    if (!smallGroup) for (const mul of DEFAULTS.budgetRelaxSteps) steps.push({ limit: maxLimit, mul });
+    for (const s of steps) {
+      const p = passing(s.mul, s.limit);
+      if (p.length) {
+        passes = p;
+        limit = s.limit;
+        budgetMul = s.mul;
+        relaxation = {
+          travel: limit > baseLimit ? { from: baseLimit, to: limit } : null,
+          budget: budgetMul > 1,
+        };
+        break;
+      }
+    }
+  }
+
+  const scored = passes
+    .map((e) => ({ ...e, ...scoreRestaurant(e.r, members, e.times, limit, weights) }))
+    .sort(byRank);
+  const chosen = selectDiverse(scored, DEFAULTS.pickCount);
+  const reserve = scored.filter((c) => !chosen.includes(c)).map((c) => shape(c, members, baseLimit, baseCeiling, budgetMul, notes));
+  const picks = chosen.map((c) => shape(c, members, baseLimit, baseCeiling, budgetMul, notes));
+
+  // Near misses when fewer than 3 passed.
+  let nearMisses = [];
+  if (picks.length < DEFAULTS.pickCount) {
+    const passIds = new Set(passes.map((e) => e.r.id));
+    nearMisses = candidates
+      .filter((e) => !passIds.has(e.r.id))
+      .map((e) => {
+        const travelOver = Math.max(0, e.worst.minutes - limit);
+        const budgetOver = Math.max(0, e.budgetRatio - budgetMul);
+        const broken = [];
+        if (travelOver > 0) broken.push({ rule: "travel", detail: `Trip over the limit: ${e.worst.minutes} min for ${e.worst.name}` });
+        if (budgetOver > 0) broken.push(smallGroup ? { rule: "fit", detail: "Doesn't suit everyone" } : { rule: "budget", detail: "Above the group's shared budget" });
+        return { e, broken, gap: travelOver / limit + budgetOver };
+      })
+      .sort((a, b) => a.broken.length - b.broken.length || a.gap - b.gap || (a.e.r.id < b.e.r.id ? -1 : 1))
+      .slice(0, DEFAULTS.pickCount - picks.length + 2)
+      .map(({ e, broken }) => ({
+        id: e.r.id,
+        name: e.r.name,
+        area: e.r.area,
+        pricePerHead: e.r.pricePerHead,
+        partner: !!e.r.partner,
+        travel: e.times,
+        broken,
+        nearMiss: true,
+      }));
+  }
+
+  const log = {
+    // A2 plan log: logged in full for weekly review (budgets stay server-side).
+    inputs: {
+      plan,
+      members: members.map((m) => ({ ...m })),
+      unanswered: input.unanswered || [],
+      weights,
+    },
+    filtered: evals.filter((e) => e.hard.length).map((e) => ({ id: e.r.id, rules: e.hard.map((h) => h.rule) })),
+    relaxation,
+    ranked: scored.map((c) => ({ id: c.r.id, total: c.total, factors: c.factors })),
+    picks: picks.map((p) => p.id),
+  };
+
+  return { picks, reserve, nearMisses, relaxation, notes, travelFallback, budget: { scope: budgetScope, relaxed: budgetMul > 1 }, log };
+}
+
+function shape(c, members, baseLimit, baseCeiling, budgetMul, notes) {
+  const tradeoffs = [];
+  if (c.worst.minutes > baseLimit) {
+    const over = c.worst.minutes - baseLimit;
+    tradeoffs.push(
+      `${over} min past the ${baseLimit}-min limit for ${c.worst.name}` +
+        (c.r.pricePerHead <= baseCeiling ? " but fits every budget" : "")
+    );
+  }
+  if (c.budgetRatio > 1) tradeoffs.push("A little above the shared budget");
+  return {
+    id: c.r.id,
+    name: c.r.name,
+    area: c.r.area,
+    pricePerHead: c.r.pricePerHead,
+    partner: !!c.r.partner, // badge only; never an input to filtering or scoring
+    travel: c.times, // per person, by first name
+    total: c.total,
+    factors: c.factors,
+    reason: explain(c, members, budgetMul > 1 && c.budgetRatio > 1),
+    tradeoffs,
+    notes: notes.filter((n) => !n.startsWith("Travel times")), // member notes shown on the cards
+    travelEstimate: notes.some((n) => n.startsWith("Travel times")),
+  };
+}
+
+// Vote and veto (PRD F9). Pure, deterministic: the same inputs always give the same winner.
+
+function createSession(result, memberNames) {
+  return {
+    members: [...memberNames],
+    shown: result.picks.slice(0, 3),
+    reserve: [...result.reserve],
+    votes: {}, // member -> pickId
+    vetoes: {}, // member -> pickId
+    removed: [],
+    events: [],
+  };
+}
+
+const clone = (s) => ({
+  ...s,
+  shown: [...s.shown],
+  reserve: [...s.reserve],
+  votes: { ...s.votes },
+  vetoes: { ...s.vetoes },
+  removed: [...s.removed],
+  events: [...s.events],
+});
+
+function assertMember(s, member) {
+  if (!s.members.includes(member)) throw new Error(`Unknown member: ${member}`);
+}
+
+function vote(s, member, pickId) {
+  assertMember(s, member);
+  if (member in s.votes) throw new Error(`${member} has already voted`);
+  if (!s.shown.some((p) => p.id === pickId)) throw new Error("Pick is not on the table");
+  const n = clone(s);
+  n.votes[member] = pickId;
+  n.events.push({ type: "vote_cast", member, pickId });
+  return n;
+}
+
+// One veto each. A veto swaps in the next-best pick once; voting does not restart.
+function veto(s, member, pickId) {
+  assertMember(s, member);
+  if (member in s.vetoes) throw new Error(`${member} has already used their veto`);
+  const idx = s.shown.findIndex((p) => p.id === pickId);
+  if (idx === -1) throw new Error("Pick is not on the table (already replaced?)");
+  const n = clone(s);
+  n.vetoes[member] = pickId;
+  n.removed.push(pickId);
+  const next = n.reserve.shift();
+  if (next) n.shown[idx] = next;
+  else n.shown.splice(idx, 1);
+  // Votes for the removed pick are void; those voters vote again.
+  for (const [m, id] of Object.entries(n.votes)) if (id === pickId) delete n.votes[m];
+  n.events.push({ type: "pick_vetoed", member, pickId, replacedBy: next ? next.id : null });
+  return n;
+}
+
+function isComplete(s, { deadlinePassed = false } = {}) {
+  return deadlinePassed || s.members.every((m) => m in s.votes);
+}
+
+const tally = (s) => {
+  const counts = Object.fromEntries(s.shown.map((p) => [p.id, 0]));
+  for (const id of Object.values(s.votes)) if (id in counts) counts[id]++;
+  return counts;
+};
+
+// Most votes wins; a tie goes to the higher fairness score; then total score; then id.
+function decide(s) {
+  const counts = tally(s);
+  const ranked = [...s.shown].sort(
+    (a, b) =>
+      counts[b.id] - counts[a.id] ||
+      b.factors.fairness - a.factors.fairness ||
+      b.total - a.total ||
+      (a.id < b.id ? -1 : 1)
+  );
+  return { winner: ranked[0] || null, counts, overridden: false };
+}
+
+// Organiser may override; allowed but logged (frequent overrides mean the engine is not trusted).
+function override(s, by, pickId) {
+  const pool = [...s.shown, ...s.reserve];
+  const pick = pool.find((p) => p.id === pickId);
+  if (!pick) throw new Error("Unknown pick");
+  const was = decide(s).winner;
+  const n = clone(s);
+  n.events.push({ type: "organiser_override", by, pickId, was: was ? was.id : null });
+  return { session: n, winner: pick, overridden: true };
+}
+
+</script>
+<script>
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const $ = (id) => document.getElementById(id);
+
+const SCREENS = [
+  ["signin", "Sign in", "Organiser"], ["profile", "Taste profile", "Organiser"], ["home", "Home", "Organiser"],
+  ["newplan", "New plan", "Organiser"], ["status", "Plan status", "Organiser"], ["picks", "Picks and vote", "Everyone"],
+  ["winner", "Winner", "Everyone"], ["friend", "Friend form", "Friend"], ["waiting", "Waiting", "Friend"], ["rating", "How was it?", "Everyone"],
+];
+const CUISINES = ["north-indian", "south-indian", "pan-asian", "italian", "continental", "street-food", "coastal", "vegan"];
+const MOODS = ["lively", "chill", "fancy", "quick", "quiet"];
+const DEMO = {
+  Riya: { area: "Koramangala", budget: 1400, mood: "lively", dealbreakers: [], cuisines: ["pan-asian"] },
+  Arjun: { area: "HSR Layout", budget: 1200, mood: "chill", dealbreakers: ["no-loud"], cuisines: ["north-indian"] },
+  Meera: { area: "Indiranagar", budget: 1000, mood: "lively", dealbreakers: [], cuisines: ["pan-asian", "italian"] },
+};
+
+const nextSat = () => { const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return d.toISOString().slice(0, 10); };
+
+const S = {
+  screen: "signin", phone: "", codeSent: false,
+  profile: { name: "Jenessa", cuisines: ["north-indian"], diet: "any", spice: "medium", budget: "800-1200", vibe: ["lively"], home: "Koramangala" },
+  plan: { date: nextSat(), time: "20:00", area: "anywhere", occasion: "Friends hangout", deadline: "2", friends: "Riya, Arjun, Meera", travelLimit: 40 },
+  shared: false, responses: {}, result: null, session: null, viewer: "Jenessa", winner: null, overridden: false,
+  friendDraft: { name: "", area: "Koramangala", budget: "", dealbreakers: [], mood: "chill" },
+  ratings: {}, log: [], rated: false,
+};
+const friends = () => S.plan.friends.split(",").map((s) => s.trim()).filter(Boolean);
+const members = () => ["Jenessa", ...friends()];
+const logEv = (type, payload = {}) => { S.log.push({ t: new Date().toISOString().slice(11, 19), type, ...payload }); };
+
+function toast(msg) {
+  const d = document.createElement("div"); d.className = "toast"; d.textContent = msg; $("toastHost").appendChild(d); setTimeout(() => d.remove(), 2600);
+}
+function go(screen) { S.screen = screen; render(); }
+
+function organiserMember() {
+  const p = S.profile;
+  return { name: "Jenessa", start: AREAS[p.home], budget: 1500, dealbreakers: p.diet === "veg" ? ["needs-veg"] : [], mood: p.vibe[0] || null, cuisines: p.cuisines, visited: [] };
+}
+function toMember(name, r) {
+  return { name, start: AREAS[r.area], budget: Number(r.budget) || null, dealbreakers: r.dealbreakers, mood: r.mood, cuisines: r.cuisines || [], visited: [] };
+}
+
+function runEngine() {
+  const answered = [organiserMember(), ...friends().filter((f) => S.responses[f]).map((f) => toMember(f, S.responses[f]))];
+  const unanswered = friends().filter((f) => !S.responses[f]).map((name) => ({ name }));
+  const pool = S.plan.area === "anywhere" ? RESTAURANTS : RESTAURANTS.filter((r) => r.area === S.plan.area);
+  S.result = generatePicks({ plan: { time: S.plan.time, travelLimitMin: Number(S.plan.travelLimit) }, members: answered, unanswered, restaurants: pool });
+  S.session = createSession(S.result, answered.map((m) => m.name));
+  S.winner = null; S.overridden = false; S.viewer = "Jenessa";
+  logEv("picks_generated", { trigger: unanswered.length ? "early" : "all answered", picks: S.result.picks.map((p) => p.id) });
+  go("picks");
+}
+
+function maybeDecide() {
+  if (S.winner) return;
+  if (isComplete(S.session)) {
+    S.winner = decide(S.session).winner; logEv("winner_decided", { id: S.winner && S.winner.id }); S.screen = "winner";
+  }
+}
+
+/* ---------- views ---------- */
+const V = {};
+V.signin = () => `<h2>Sign in</h2><p class="sub">Organisers only. Friends never sign in.</p>
+  <label>Phone number</label><input id="phone" inputmode="numeric" placeholder="+91 98xxxxxxxx" value="${esc(S.phone)}">
+  ${S.codeSent ? `<label>One-time code</label><input id="otp" inputmode="numeric" value="123456"><p class="mute">Prototype: any code works.</p><button class="btn" data-act="verify">Verify</button>`
+    : `<button class="btn" data-act="sendcode">Send code</button>`}`;
+
+V.profile = () => {
+  const p = S.profile;
+  return `<h2>Your taste</h2><p class="sub">6 quick questions. Skip any.</p>
+  <label>Cuisines you like</label><div class="chips">${CUISINES.map((c) => `<span class="chip ${p.cuisines.includes(c) ? "on" : ""}" data-act="pcuisine" data-v="${c}">${c}</span>`).join("")}</div>
+  <div class="row"><div><label>Diet</label><select data-bind="profile.diet">${["any", "veg", "vegan", "jain"].map((o) => `<option ${p.diet === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+  <div><label>Spice</label><select data-bind="profile.spice">${["mild", "medium", "hot"].map((o) => `<option ${p.spice === o ? "selected" : ""}>${o}</option>`).join("")}</select></div></div>
+  <div class="row"><div><label>Budget band</label><select data-bind="profile.budget">${["under 500", "500-800", "800-1200", "1200+"].map((o) => `<option ${p.budget === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+  <div><label>Home area</label><select data-bind="profile.home">${Object.keys(AREAS).map((o) => `<option ${p.home === o ? "selected" : ""}>${o}</option>`).join("")}</select></div></div>
+  <label>Vibe</label><div class="chips">${MOODS.map((c) => `<span class="chip ${p.vibe.includes(c) ? "on" : ""}" data-act="pvibe" data-v="${c}">${c}</span>`).join("")}</div>
+  <button class="btn" data-act="saveprofile">Save</button><button class="btn sec sm" data-act="saveprofile">Skip for now</button>`;
+};
+
+V.home = () => `<h2>Hi ${esc(S.profile.name)}</h2><p class="sub">What are we planning?</p>
+  <button class="btn" data-act="newplan">Plan with friends</button>
+  <button class="btn sec" disabled>Date night <span class="badge">P1</span></button>
+  <button class="btn sec" disabled>Find something new <span class="badge">P1</span></button>
+  <label>Active plans</label>${S.shared ? `<div class="card" data-act="toStatus" style="cursor:pointer"><b>${esc(S.plan.occasion)}</b><div class="mute">${esc(S.plan.date)} · ${esc(S.plan.time)} · ${friends().filter((f) => S.responses[f]).length}/${friends().length} answered</div></div>` : `<p class="mute">No active plans.</p>`}
+  <button class="btn sec sm" data-act="editprofile">Edit taste profile</button>`;
+
+V.newplan = () => {
+  const p = S.plan;
+  return `<h2>New plan</h2>
+  <div class="row"><div><label>Date</label><input type="date" data-bind="plan.date" value="${p.date}"></div><div><label>Time</label><input type="time" data-bind="plan.time" value="${p.time}"></div></div>
+  <label>Area</label><select data-bind="plan.area"><option value="anywhere" ${p.area === "anywhere" ? "selected" : ""}>Anywhere fair</option>${["Koramangala", "HSR Layout", "Indiranagar"].map((a) => `<option ${p.area === a ? "selected" : ""}>${a}</option>`).join("")}</select>
+  <div class="row"><div><label>Occasion</label><select data-bind="plan.occasion">${["Friends hangout", "Birthday", "Catch-up", "Celebration"].map((o) => `<option ${p.occasion === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+  <div><label>Answer by</label><select data-bind="plan.deadline">${[["1", "1 hour"], ["2", "2 hours"], ["6", "6 hours"]].map(([v, l]) => `<option value="${v}" ${p.deadline === v ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
+  <label>Friends (first names)</label><input data-bind="plan.friends" value="${esc(p.friends)}">
+  <label>Max trip per person (min)</label><input type="number" min="10" max="90" data-bind="plan.travelLimit" value="${p.travelLimit}">
+  <button class="btn" data-act="shareplan">Share on WhatsApp</button>`;
+};
+
+const waText = () => `Dinner plan: ${S.plan.occasion}, ${S.plan.date} at ${S.plan.time}. Takes 30 seconds, no sign-in, your budget stays private: https://example.com/p/abc123`;
+
+V.status = () => {
+  const fr = friends();
+  const n = fr.filter((f) => S.responses[f]).length;
+  return `<h2>${esc(S.plan.occasion)}</h2><p class="sub">${esc(S.plan.date)} · ${esc(S.plan.time)} · closes in ${S.plan.deadline}h</p>
+  ${S.shared ? `<div class="note"><b>Shared message:</b> ${esc(waText())}</div>` : ""}
+  <div class="person"><span>Jenessa (you)</span><span class="ok">✓ answered</span></div>
+  ${fr.map((f) => `<div class="person"><span>${esc(f)}</span>${S.responses[f] ? `<span class="ok">✓ answered</span>` : `<span class="mute">waiting…</span>`}</div>`).join("")}
+  <p class="mute">You see who has answered, never what they said.</p>
+  <button class="btn" data-act="getpicks" ${n >= 2 ? "" : "disabled"}>${n === fr.length ? "Get picks" : "Get picks now (" + n + " of " + fr.length + ")"}</button>
+  ${n < 2 ? `<p class="mute">Needs 2+ friends to answer.</p>` : ""}
+  <button class="btn sec sm" data-act="openfriend">Open friend form as a friend</button>
+  <button class="btn sec sm" data-act="fillall">Demo: fill all friend answers</button>
+  <a class="btn sec sm" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(waText())}">Share again on WhatsApp</a>`;
+};
+
+V.friend = () => {
+  const d = S.friendDraft; const dbs = [["needs-veg", "Need veg options"], ["needs-vegan", "Need vegan"], ["needs-jain", "Need Jain"], ["no-alcohol", "No bar-led places"], ["no-loud", "Too loud"]];
+  return `<h2>${esc(S.profile.name)} invited you</h2><p class="sub">${esc(S.plan.occasion)} · ${esc(S.plan.date)} · 30 seconds</p>
+  <label>Your first name</label><select data-bind="friendDraft.name"><option value="">Choose…</option>${friends().filter((f) => !S.responses[f]).map((f) => `<option ${d.name === f ? "selected" : ""}>${esc(f)}</option>`).join("")}</select>
+  <label>Where will you start from?</label><select data-bind="friendDraft.area">${Object.keys(AREAS).map((a) => `<option ${d.area === a ? "selected" : ""}>${a}</option>`).join("")}</select>
+  <label>Your max per person (private)</label><input type="number" inputmode="numeric" placeholder="e.g. 1000" data-bind="friendDraft.budget" value="${esc(d.budget)}"><div class="mute">Only the picker sees this. Nobody else ever does.</div>
+  <label>Dealbreakers</label><div class="chips">${dbs.map(([k, l]) => `<span class="chip ${d.dealbreakers.includes(k) ? "on" : ""}" data-act="fdb" data-v="${k}">${l}</span>`).join("")}</div>
+  <label>Mood</label><div class="chips">${MOODS.map((m) => `<span class="chip ${d.mood === m ? "on" : ""}" data-act="fmood" data-v="${m}">${m}</span>`).join("")}</div>
+  <button class="btn" data-act="submitfriend">Submit</button>
+  <div class="consent">By submitting you agree we use your answers only to plan this outing. They are deleted 90 days after the plan.</div>`;
+};
+
+V.waiting = () => `<h2>Thanks, ${esc(S.friendDraft.name || "friend")}!</h2><p class="sub">Picks arrive when everyone answers or at ${esc(S.plan.time)} - ${esc(S.plan.deadline)}h deadline.</p>
+  <div class="note">You'll get the link back on WhatsApp.</div>
+  <button class="btn sec" data-act="backorg">Back to organiser view</button>`;
+
+const money = (n) => "₹" + n.toLocaleString("en-IN");
+
+V.picks = () => {
+  const s = S.session, r = S.result;
+  if (!r.picks.length && !r.nearMisses.length) return `<h2>No picks</h2><p class="sub">Nothing fits everyone. Try a longer trip limit.</p><button class="btn" data-act="backstatus">Back</button>`;
+  const voted = Object.keys(s.votes).length, total = s.members.length;
+  const done = !!s.votes[S.viewer], usedVeto = S.viewer in s.vetoes;
+  const prices = s.shown.map((p) => p.pricePerHead);
+  return `<h2>Pick one</h2><p class="sub">${voted}/${total} voted · each person gets one vote and one veto</p>
+  <label style="margin-top:0">Demo: voting as</label><select data-bind="viewer">${s.members.map((m) => `<option ${S.viewer === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select>
+  ${prices.length ? `<div class="note">${money(Math.min(...prices))}-${money(Math.max(...prices))} a head works for all</div>` : ""}
+  ${r.notes.filter((n) => !n.startsWith("Travel")).map((n) => `<div class="note">${esc(n)}</div>`).join("")}
+  ${r.travelFallback ? `<div class="note">Travel times are straight-line estimates</div>` : ""}
+  ${s.shown.map((p) => `<div class="card"><h3>${esc(p.name)}${p.partner ? ` <span class="badge">Partner</span>` : ""}</h3>
+    <div class="mute">${esc(p.area)} · ${money(p.pricePerHead)} a head</div>
+    <div class="why">${esc(p.reason)}</div>
+    <div class="trav">${p.travel.map((t) => `${esc(t.name)} ${t.minutes} min`).join(" · ")}</div>
+    ${p.tradeoffs.map((t) => `<div class="trade">${esc(t)}</div>`).join("")}
+    <div class="row"><button class="btn sm" data-act="vote" data-v="${p.id}" ${done ? "disabled" : ""}>${s.votes[S.viewer] === p.id ? "Voted ✓" : "Vote"}</button>
+    <button class="btn sm sec" data-act="veto" data-v="${p.id}" ${usedVeto ? "disabled" : ""}>Veto</button></div></div>`).join("")}
+  ${r.nearMisses.length ? `<label>Nearest misses</label>${r.nearMisses.map((m) => `<div class="card"><b>${esc(m.name)}</b> <span class="mute">${esc(m.area)}</span>${m.broken.map((b) => `<div class="trade">${esc(b.detail)}</div>`).join("")}</div>`).join("")}` : ""}
+  <button class="btn sec sm" data-act="closevote">Organiser: close voting now (deadline)</button>
+  ${S.viewer === "Jenessa" ? `<details><summary class="mute">Override result (logged)</summary>${[...s.shown, ...s.reserve].slice(0, 5).map((p) => `<button class="btn sec sm" data-act="override" data-v="${p.id}">Choose ${esc(p.name)}</button>`).join("")}</details>` : ""}`;
+};
+
+V.winner = () => {
+  const w = S.winner;
+  if (!w) return `<h2>No winner</h2>`;
+  const rest = RESTAURANTS.find((r) => r.id === w.id);
+  const msg = `We're going to ${w.name} (${w.area}), ${S.plan.date} at ${S.plan.time}. ${w.reason}`;
+  return `<h2>It's ${esc(w.name)}!</h2><p class="sub">${esc(w.area)} · ${money(w.pricePerHead)} a head${S.overridden ? " · organiser's choice" : ""}</p>
+  <div class="card"><div class="why">${esc(w.reason)}</div><div class="trav">${w.travel.map((t) => `${esc(t.name)} ${t.minutes} min`).join(" · ")}</div>${w.partner ? `<span class="badge">Partner</span>` : ""}</div>
+  <a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg)}">Share to WhatsApp</a>
+  <div class="row"><button class="btn sec sm" data-act="call">Call</button>
+  <a class="btn sec sm" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${rest.lat},${rest.lng}">Directions</a>
+  <button class="btn sec sm" data-act="book">Booking app</button></div>
+  <button class="btn sec" data-act="torating">Next day: How was it?</button>
+  <p class="mute">Closed or changed? <a href="#" data-act="report" style="color:var(--acc)">Tell us</a></p>`;
+};
+
+V.rating = () => {
+  const names = S.session ? S.session.members : members();
+  const w = S.winner;
+  if (S.rated) {
+    const went = Object.values(S.ratings).filter((r) => r.went === "yes").length;
+    const rs = Object.values(S.ratings).map((r) => r.stars).filter(Boolean);
+    return `<h2>Thanks!</h2><p class="sub">Stored against the plan and fed to the metrics.</p>
+    <div class="card">Visit rate: <b>${Math.round((went / Math.max(1, names.length)) * 100)}%</b> went<br>Pick satisfaction: <b>${rs.length ? (rs.reduce((a, b) => a + b, 0) / rs.length).toFixed(1) : "-"}</b> / 5</div>
+    <button class="btn" data-act="restart">Start another plan</button>`;
+  }
+  return `<h2>How was it?</h2><p class="sub">${w ? esc(w.name) : "Your plan"} · tap to answer</p>
+  ${names.map((n) => { const r = S.ratings[n] || {}; return `<div class="card"><b>${esc(n)}</b>
+    <div class="chips" style="margin:6px 0">${[["yes", "Went"], ["no", "Didn't go"], ["elsewhere", "Went elsewhere"]].map(([k, l]) => `<span class="chip ${r.went === k ? "on" : ""}" data-act="went" data-n="${esc(n)}" data-v="${k}">${l}</span>`).join("")}</div>
+    <div class="stars">${[1, 2, 3, 4, 5].map((i) => `<button class="${(r.stars || 0) >= i ? "on" : ""}" data-act="star" data-n="${esc(n)}" data-v="${i}" aria-label="${i} stars">★</button>`).join("")}</div></div>`; }).join("")}
+  <button class="btn" data-act="submitrating">Submit</button>`;
+};
+
+/* ---------- render ---------- */
+function render() {
+  const idx = SCREENS.findIndex((s) => s[0] === S.screen);
+  $("nav").innerHTML = SCREENS.map((s, i) => `<button class="${s[0] === S.screen ? "on" : ""}" data-act="nav" data-v="${s[0]}"><b>${i + 1}</b>${s[1]}<small>${s[2]}</small></button>`).join("");
+  $("top").innerHTML = `<span>${idx + 1}. ${SCREENS[idx][1]}</span><span class="as">${SCREENS[idx][2]}</span>`;
+  const keepScroll = $("body").scrollTop;
+  $("body").innerHTML = V[S.screen]();
+  $("body").scrollTop = keepScroll;
+  $("payload").textContent = S.result ? JSON.stringify({ picks: S.result.picks, reserve: S.result.reserve.slice(0, 2) }, null, 1) : "Generate picks first.";
+  $("planlog").textContent = S.result ? JSON.stringify({ engine: S.result.log, events: S.log }, null, 1) : "Nothing yet.";
+}
+
+function setPath(path, value) {
+  const parts = path.split("."); let o = S;
+  while (parts.length > 1) o = o[parts.shift()];
+  o[parts[0]] = value;
+}
+
+document.addEventListener("input", (e) => { const b = e.target.dataset && e.target.dataset.bind; if (b && e.target.tagName === "INPUT") setPath(b, e.target.value); if (e.target.id === "phone") S.phone = e.target.value; });
+document.addEventListener("change", (e) => { const b = e.target.dataset && e.target.dataset.bind; if (b && e.target.tagName === "SELECT") { setPath(b, e.target.value); if (b === "viewer" || b === "friendDraft.name") render(); } });
+
+const toggle = (arr, v) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]"); if (!el || el.disabled) return;
+  const act = el.dataset.act, v = el.dataset.v, n = el.dataset.n;
+  if (act === "report") e.preventDefault();
+  try {
+    switch (act) {
+      case "nav": go(v); return;
+      case "sendcode": S.codeSent = true; return render();
+      case "verify": return go("profile");
+      case "pcuisine": S.profile.cuisines = toggle(S.profile.cuisines, v); return render();
+      case "pvibe": S.profile.vibe = toggle(S.profile.vibe, v); return render();
+      case "saveprofile": logEv("profile_completed"); return go("home");
+      case "editprofile": return go("profile");
+      case "newplan": return go("newplan");
+      case "shareplan": S.shared = true; S.responses = {}; S.result = null; S.session = null; logEv("plan_created"); logEv("plan_shared"); window.open("https://wa.me/?text=" + encodeURIComponent(waText()), "_blank", "noopener"); return go("status");
+      case "toStatus": return go("status");
+      case "openfriend": S.friendDraft = { name: "", area: "Koramangala", budget: "", dealbreakers: [], mood: "chill" }; logEv("link_opened"); return go("friend");
+      case "fdb": S.friendDraft.dealbreakers = toggle(S.friendDraft.dealbreakers, v); return render();
+      case "fmood": S.friendDraft.mood = v; return render();
+      case "submitfriend": {
+        const d = S.friendDraft;
+        if (!d.name) return toast("Choose your name first");
+        S.responses[d.name] = { area: d.area, budget: d.budget, dealbreakers: d.dealbreakers, mood: d.mood, cuisines: [] };
+        logEv("response_submitted", { name: d.name }); return go("waiting");
+      }
+      case "backorg": return go("status");
+      case "fillall": friends().forEach((f) => { S.responses[f] = DEMO[f] || { area: "Koramangala", budget: 1000, mood: "chill", dealbreakers: [], cuisines: [] }; }); return render();
+      case "getpicks": return runEngine();
+      case "backstatus": return go("status");
+      case "vote": S.session = vote(S.session, S.viewer, v); maybeDecide(); return render();
+      case "veto": S.session = veto(S.session, S.viewer, v); logEv("pick_vetoed", { by: S.viewer, id: v }); return render();
+      case "closevote": S.winner = decide(S.session).winner; logEv("winner_decided", { id: S.winner && S.winner.id, trigger: "deadline" }); return go("winner");
+      case "override": { const o = override(S.session, "Jenessa", v); S.session = o.session; S.winner = o.winner; S.overridden = true; logEv("organiser_override", { id: v }); return go("winner"); }
+      case "call": return toast("Sample data has no phone numbers. Real build opens tel: link.");
+      case "book": return toast("Booking-app deep links are an open question in the PRD.");
+      case "report": return toast("Thanks, flagged for the weekly curation review.");
+      case "torating": S.rated = false; S.ratings = {}; return go("rating");
+      case "went": S.ratings[n] = { ...(S.ratings[n] || {}), went: v }; return render();
+      case "star": S.ratings[n] = { ...(S.ratings[n] || {}), stars: Number(v) }; return render();
+      case "submitrating": S.rated = true; logEv("visit_reported"); logEv("rating_submitted", { ratings: S.ratings }); return render();
+      case "restart": S.shared = false; S.responses = {}; S.result = null; S.session = null; S.winner = null; S.rated = false; return go("home");
+    }
+  } catch (err) { toast(err.message); }
+});
+
+render();
+</script>
+</body>
+</html>

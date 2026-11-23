@@ -1,0 +1,52 @@
+# Single server: the app plus Caddy, which gets and renews the HTTPS certificate automatically.
+# Usage (from this folder): cp .env.example .env, edit it, add restaurants.csv, then
+#   docker compose up -d --build
+# Run ONE app container only: rate limits and the reminder scheduler live in the process.
+services:
+  app:
+    build: ..
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DB_PATH: /data/group-dining.sqlite
+      BACKUP_DIR: /data/backups
+      RESTAURANTS_CSV: /config/restaurants.csv
+      TRUST_PROXY: "1" # Caddy is the only thing in front of the app
+    volumes:
+      - appdata:/data
+      - ./restaurants.csv:/config/restaurants.csv:ro
+    expose:
+      - "3000" # reachable by Caddy only, never published to the internet
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  appdata:
+  caddydata:
+  caddyconfig:

@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<meta property="og:title" content="__TITLE__">
+<meta property="og:description" content="__DESC__">
+<meta name="description" content="__DESC__">
+<style>
+  :root{--bg:#f4f1ec;--card:#fff;--ink:#1d1b19;--mute:#6b665f;--line:#e5dfd6;--acc:#c24410;--acc2:#fbe9e0;--ok:#237a4b}
+  @media (prefers-color-scheme:dark){:root{--bg:#171513;--card:#232019;--ink:#f3eee7;--mute:#a39c92;--line:#3a352d;--acc:#ff7a45;--acc2:#3a261b;--ok:#5fcf93}}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,sans-serif}
+  main{max-width:420px;margin:0 auto;padding:16px}
+  h1{font-size:20px;margin:0 0 4px}.sub,.mute{color:var(--mute);font-size:14px}
+  label{display:block;font-weight:600;font-size:14px;margin:14px 0 4px}
+  input,select{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font-size:16px}
+  input[type=checkbox]{width:auto}
+  button,.btn{display:block;width:100%;padding:13px;margin-top:12px;border:0;border-radius:12px;background:var(--acc);color:#fff;font-weight:600;font-size:16px;cursor:pointer;text-align:center;text-decoration:none}
+  button.sec{background:var(--card);color:var(--ink);border:1px solid var(--line)}button:disabled{opacity:.45}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}.chip{padding:8px 12px;border:1px solid var(--line);border-radius:99px;background:var(--card);color:var(--ink);font-size:14px;width:auto;margin:0;font-weight:400}
+  .chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+  .card{border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0;background:var(--card)}
+  .card h3{margin:0 0 2px;font-size:17px}.badge{font-size:11px;padding:2px 7px;border-radius:99px;background:var(--acc2);color:var(--acc);font-weight:600}
+  .row{display:flex;gap:8px}.row>*{flex:1}.err{color:#b3261e;font-size:14px;margin-top:8px}.trade{color:#a05a00;font-size:13px}
+  .note{background:var(--acc2);border-radius:10px;padding:8px 10px;font-size:13px;margin:8px 0}
+  .stars button{display:inline-block;width:auto;background:none;color:var(--line);font-size:26px;padding:0 4px;margin:0}.stars button.on{color:#f0a500}
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite">Loading…</main>
+<script>
+const planId = location.pathname.split("/").pop();
+const KEY = "gd:" + planId;
+const AREAS = ["Koramangala", "HSR Layout", "Indiranagar", "Domlur", "BTM Layout", "Jayanagar", "Marathahalli"];
+const MOODS = ["lively", "chill", "fancy", "quick", "quiet"];
+const DBS = [["needs-veg", "Need veg options"], ["needs-vegan", "Need vegan"], ["needs-jain", "Need Jain"], ["no-alcohol", "No bar-led places"], ["no-loud", "Too loud"]];
+const app = document.getElementById("app");
+let me = null; try { me = JSON.parse(localStorage.getItem(KEY) || "null"); } catch {}
+let plan = null, picks = null, draft = { dealbreakers: [], mood: "chill", area: AREAS[0] }, err = "", t0 = Date.now(), timer = null;
+
+const api = async (path, opts = {}) => {
+  // The key identifies us on reads too: the server hides surprise picks from the person being surprised.
+  const r = await fetch("/api/plans/" + planId + path, { method: opts.body ? "POST" : "GET", headers: { "content-type": "application/json", ...(me && me.key ? { "x-member-key": me.key } : {}) }, body: opts.body ? JSON.stringify({ ...opts.body, memberKey: me && me.key }) : undefined });
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || "Error"); return j;
+};
+function h(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); }
+  for (const k of kids.flat()) e.append(k instanceof Node ? k : document.createTextNode(k));
+  return e;
+}
+const rupee = (n) => "₹" + Number(n).toLocaleString("en-IN");
+const draw = (...nodes) => { app.replaceChildren(...nodes.flat(Infinity).filter((n) => n !== "")); };
+
+/* ---------- Analytics (PRD section 9). A random browser id, never a name or number. ---------- */
+const randomId = () => (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join(""));
+let cid; try { cid = localStorage.getItem("gd:cid") || (localStorage.setItem("gd:cid", (cid = randomId())), cid); } catch { cid = randomId(); }
+// sendBeacon survives the page closing or navigating to a phone/booking app.
+function track(type, extra = {}) {
+  const url = "/api/plans/" + planId + "/events", data = JSON.stringify({ type, cid, ...extra });
+  try { if (navigator.sendBeacon && navigator.sendBeacon(url, new Blob([data], { type: "text/plain" }))) return; } catch {}
+  fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: data, keepalive: true }).catch(() => {});
+}
+// response_abandoned: the furthest field touched, sent once if the page is left without submitting.
+let lastField = null, abandonSent = false;
+const FIELD_OF = { name: "name", startq: "start", area: "start", budget: "budget", rphone: "reminder", rconsent: "reminder", consent: "consent" };
+const noteField = (e) => {
+  if (me || !e.target.closest) return;
+  const el = e.target.closest("[id], [data-field]");
+  const f = el && (el.dataset.field || FIELD_OF[el.id]);
+  if (f) lastField = f;
+};
+app.addEventListener("focusin", noteField);
+app.addEventListener("click", noteField);
+const leaving = () => { if (lastField && !me && !abandonSent && plan && plan.status === "open") { abandonSent = true; track("response_abandoned", { lastField }); } };
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") leaving(); });
+window.addEventListener("pagehide", leaving);
+
+// F10 hand-off buttons: only those the curated list has a link for.
+function handoffButtons(w) {
+  const go = (kind) => () => track("handoff_clicked", { kind });
+  return h("div", { class: "row" },
+    w.callUrl ? h("a", { class: "btn sec", href: w.callUrl, onclick: go("call") }, "Call") : "",
+    w.directionsUrl ? h("a", { class: "btn", href: w.directionsUrl, target: "_blank", rel: "noopener", onclick: go("directions") }, "Directions") : "",
+    w.bookingUrl ? h("a", { class: "btn sec", href: w.bookingUrl, target: "_blank", rel: "noopener", onclick: go("booking") }, "Book") : "");
+}
+
+/* ---------- Start-point picker (F5): search, or pin your current location ---------- */
+// Google Places "session": one token per search, reused for its autocomplete calls and the final lookup.
+const newToken = () => (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join(""));
+let sessionToken = newToken();
+
+function startPicker() {
+  const box = h("div", { class: "card" });
+  if (draft.start) {
+    box.append(h("div", {}, "📍 ", h("b", {}, draft.start.label || "Selected place")),
+      h("button", { type: "button", class: "sec", onclick: () => { draft.start = null; render(); } }, "Change"));
+    return box;
+  }
+  const input = h("input", { id: "startq", type: "search", autocomplete: "off", placeholder: "Search a place or area", "aria-label": "Search where you'll start from", "aria-controls": "startlist" });
+  const list = h("div", { id: "startlist", role: "listbox", "aria-label": "Suggestions" });
+  const msg = h("p", { class: "mute", role: "status" });
+  let timer, seq = 0;
+  const pick = async (r) => {
+    msg.textContent = "Looking that up…";
+    try {
+      const res = await fetch(`/api/places/details?plan=${planId}&id=${encodeURIComponent(r.id)}&token=${sessionToken}`);
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Couldn't use that place");
+      draft.start = { lat: j.lat, lng: j.lng, label: r.label };
+      sessionToken = newToken(); // the session ends with the lookup
+      render();
+    } catch (e) { msg.textContent = e.message; }
+  };
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const text = input.value.trim();
+    const mine = ++seq;
+    if (text.length < 2) { list.replaceChildren(); msg.textContent = ""; return; }
+    timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/places/search?plan=${planId}&q=${encodeURIComponent(text)}&token=${sessionToken}`);
+        const j = await res.json();
+        if (mine !== seq) return; // a newer keystroke superseded this answer
+        if (!res.ok) throw new Error(j.error || "Search is unavailable");
+        list.replaceChildren(...j.results.map((r) => h("button", { type: "button", role: "option", class: "sec", style: "text-align:left;font-weight:400", onclick: () => pick(r) }, h("b", {}, r.label), r.secondary ? h("div", { class: "mute" }, r.secondary) : "")));
+        msg.textContent = j.results.length ? (j.source === "google" ? "Powered by Google" : "") : "No match. Try another word, or choose an area below.";
+      } catch (e) { if (mine === seq) { list.replaceChildren(); msg.textContent = e.message + ". You can choose an area below."; } }
+    }, 250);
+  });
+  const here = h("button", { type: "button", class: "sec", onclick: () => {
+    if (!navigator.geolocation) { msg.textContent = "Your browser can't share a location. Search or choose an area."; return; }
+    msg.textContent = "Finding you…";
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { draft.start = { lat: pos.coords.latitude, lng: pos.coords.longitude, label: "Your current location" }; render(); },
+      () => { msg.textContent = "Couldn't get your location. Search or choose an area instead."; },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+  } }, "📍 Use my current location");
+  box.append(input, list, msg, here);
+  return box;
+}
+
+const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+// Optional, separate consent, and only offered when the server can actually send. Never required.
+function remindBlock() {
+  if (!plan.reminders || !plan.reminders.enabled) return "";
+  return h("div", { class: "card" },
+    h("label", { for: "rphone", style: "margin-top:0" }, "Text me a reminder (optional)"),
+    h("input", { id: "rphone", type: "tel", inputmode: "numeric", autocomplete: "tel", placeholder: "98xxxxxxxx", value: draft.reminderPhone || "", oninput: (e) => (draft.reminderPhone = e.target.value) }),
+    h("label", { style: "display:flex;gap:8px;font-weight:400;font-size:13px" }, h("input", { type: "checkbox", id: "rconsent", checked: !!draft.reminderConsent, onchange: (e) => (draft.reminderConsent = e.target.checked) }),
+      "Send me one text at " + clock(plan.reminders.at) + ", 3 hours before, with the place and directions. My number is deleted right after."));
+}
+
+function form() {
+  const names = plan.pending;
+  return [
+    h("h1", {}, plan.organiser + (plan.mode === "couple" ? " is planning a date night with you" : " invited you")), h("p", { class: "sub" }, plan.occasion + " · " + plan.date + " · " + plan.time + " · 30 seconds"),
+    plan.surpriseFor === "partner" ? h("div", { class: "note" }, "There's a surprise. Answer the form, and the place will be revealed on the day.") : "",
+    h("label", { for: "name" }, "Your first name"),
+    names.length ? h("select", { id: "name", onchange: (e) => (draft.name = e.target.value) }, h("option", { value: "" }, "Choose…"), names.map((n) => h("option", { value: n, selected: draft.name === n }, n)))
+      : h("input", { id: "name", autocomplete: "given-name", value: draft.name || "", oninput: (e) => (draft.name = e.target.value) }),
+    h("label", { for: "startq" }, "Where will you start from?"),
+    startPicker(),
+    h("label", { for: "area", class: "mute", style: "font-weight:400" }, "…or choose an area"),
+    h("select", { id: "area", disabled: !!draft.start, onchange: (e) => (draft.area = e.target.value) }, AREAS.map((a) => h("option", { selected: draft.area === a }, a))),
+    h("label", { for: "budget" }, "Your max per person (private)"),
+    h("input", { id: "budget", type: "number", inputmode: "numeric", placeholder: "e.g. 1000", value: draft.budget || "", oninput: (e) => (draft.budget = e.target.value) }),
+    h("p", { class: "mute" }, "Only the picker engine sees this. Nobody in the group ever does."),
+    h("label", {}, "Dealbreakers"),
+    h("div", { class: "chips", "data-field": "dealbreakers" }, DBS.map(([k, l]) => h("button", { class: "chip" + (draft.dealbreakers.includes(k) ? " on" : ""), type: "button", "aria-pressed": String(draft.dealbreakers.includes(k)), onclick: () => { draft.dealbreakers = draft.dealbreakers.includes(k) ? draft.dealbreakers.filter((x) => x !== k) : [...draft.dealbreakers, k]; render(); } }, l))),
+    h("label", {}, "Mood"),
+    h("div", { class: "chips", "data-field": "mood" }, MOODS.map((m) => h("button", { class: "chip" + (draft.mood === m ? " on" : ""), type: "button", "aria-pressed": String(draft.mood === m), onclick: () => { draft.mood = m; render(); } }, m))),
+    remindBlock(),
+    h("label", { style: "display:flex;gap:8px;font-weight:400;font-size:13px" }, h("input", { type: "checkbox", id: "consent", checked: !!draft.consent, onchange: (e) => (draft.consent = e.target.checked) }), "I agree my answers are used only to plan this outing and deleted 90 days after it."),
+    h("p", { class: "mute", style: "font-size:12px" }, h("a", { href: "/privacy", target: "_blank", rel: "noopener", style: "color:var(--acc)" }, "Privacy policy"), " · You can delete your answers from this page at any time."),
+    err ? h("div", { class: "err", role: "alert" }, err) : "",
+    h("button", { onclick: submit }, "Submit"),
+  ];
+}
+async function submit() {
+  err = "";
+  try {
+    const r = await fetch("/api/plans/" + planId + "/responses", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: draft.name, ...(draft.start ? { start: { lat: draft.start.lat, lng: draft.start.lng } } : { area: draft.area }), budget: draft.budget || null, dealbreakers: draft.dealbreakers, mood: draft.mood, consent: !!draft.consent, reminderPhone: draft.reminderPhone || undefined, reminderConsent: draft.reminderPhone ? !!draft.reminderConsent : undefined, secondsTaken: Math.round((Date.now() - t0) / 1000), cid }) });
+    const j = await r.json(); if (!r.ok) throw new Error(j.error);
+    me = { key: j.memberKey, name: draft.name, reminder: !!j.reminder }; try { localStorage.setItem(KEY, JSON.stringify(me)); } catch {}
+  } catch (e) { err = e.message; }
+  await refresh();
+}
+
+const day = (ms) => new Date(ms).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" });
+const hiddenScreen = () => [h("h1", {}, "It's a surprise"), h("p", { class: "sub" }, "The place will be revealed on " + day(picks.revealAt) + "."), h("div", { class: "note" }, "Nothing about the picks is sent to this phone until then.")];
+
+function voting() {
+  const iVoted = picks.voted.includes(me.name), iVetoed = picks.vetoUsed.includes(me.name);
+  const planner = picks.surprise; // you were asked to choose; your vote decides
+  return [
+    h("h1", {}, "Pick one"), h("p", { class: "sub" }, planner ? "Your vote decides. You also have one veto." : picks.voted.length + "/" + picks.members.length + " voted · one vote and one veto each"),
+    planner ? h("div", { class: "note" }, "Hidden from " + planner.hiddenFrom + " until " + day(planner.revealAt) + ". Keep it secret!") : "",
+    budgetLine(picks),
+    ...picks.notes.map((n) => h("div", { class: "note" }, n)),
+    picks.picks.map((p) => h("div", { class: "card" },
+      h("h3", {}, p.name, " ", p.partner ? h("span", { class: "badge" }, "Partner") : ""),
+      h("div", { class: "mute" }, p.area + " · " + rupee(p.pricePerHead) + " a head"),
+      h("p", {}, p.reason), h("div", { class: "mute" }, p.travel.map((t) => t.name + " " + t.minutes + " min").join(" · ")),
+      p.tradeoffs.map((t) => h("div", { class: "trade" }, t)),
+      h("div", { class: "row" }, h("button", { disabled: iVoted, onclick: () => act("/votes", p.id) }, iVoted ? "Voted" : "Vote"), h("button", { class: "sec", disabled: iVetoed, onclick: (e) => askVetoReason(e.currentTarget, p.id) }, "Veto")),
+      reportLink(p.id))),
+    err ? h("div", { class: "err", role: "alert" }, err) : "",
+  ];
+}
+async function act(path, pickId, extra = {}) { err = ""; try { picks = await api(path, { body: { pickId, ...extra } }); } catch (e) { err = e.message; } await refresh(); }
+
+// PRD content rule: budgets only ever appear as a shared range built from the picks on screen.
+function budgetLine(pk) {
+  const prices = pk.picks.map((p) => p.pricePerHead);
+  if (!prices.length) return "";
+  const lo = Math.min(...prices), hi = Math.max(...prices);
+  const range = lo === hi ? rupee(lo) : rupee(lo) + "-" + rupee(hi).replace("₹", "");
+  const tail = pk.budgetScope === "all" ? " a head works for all" : pk.budgetScope === "given" ? " a head, within every budget given" : " a head";
+  return h("div", { class: "note" }, range + tail);
+}
+
+// PRD open question: should a veto ask for a reason? Optional; never shown to the group.
+function askVetoReason(btn, pickId) {
+  const row = btn.closest(".row");
+  const reasons = [["too_far", "Too far"], ["too_pricey", "Too pricey"], ["not_my_food", "Not my food"], ["other", "Other"]];
+  row.replaceWith(h("div", {}, h("p", { class: "mute" }, "Why veto it? (optional, only used to improve picks)"),
+    h("div", { class: "chips" }, reasons.map(([k, l]) => h("button", { type: "button", class: "chip", onclick: () => act("/vetoes", pickId, { reason: k }) }, l))),
+    h("button", { type: "button", class: "sec", onclick: () => act("/vetoes", pickId) }, "Just veto")));
+}
+
+// "Closed or changed?" on every card (PRD: the curated list goes stale). Goes to the weekly curation review.
+function reportLink(restaurantId) {
+  const wrap = h("div", { class: "mute", style: "font-size:12px;margin-top:6px" });
+  const send = async (kind) => {
+    try { const r = await fetch("/api/reports", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ restaurantId, planId, kind }) }); if (!r.ok) throw 0; wrap.replaceChildren("Thanks, we'll check it."); }
+    catch { wrap.replaceChildren("Couldn't send that. Try again later."); }
+  };
+  wrap.append(h("a", { href: "#", style: "color:var(--mute)", onclick: (e) => { e.preventDefault();
+    wrap.replaceChildren("What's wrong? ", ...[["closed", "Closed"], ["changed", "Prices or menu changed"], ["other", "Something else"]].flatMap(([k, l], i) => [i ? " · " : "", h("a", { href: "#", style: "color:var(--acc)", onclick: (ev) => { ev.preventDefault(); send(k); } }, l)]));
+  } }, "Closed or changed?"));
+  return wrap;
+}
+
+// F11: the post-visit check opens once the plan's time has come.
+const planStarted = () => Date.now() >= Date.parse(`${plan.date}T${plan.time}:00+05:30`);
+
+let stars = 0, went = "";
+function winner() {
+  const w = picks.winner.pick;
+  return [
+    h("h1", {}, "It's " + w.name + "!"), h("p", { class: "sub" }, w.area + " · " + rupee(w.pricePerHead) + " a head" + (picks.winner.overridden ? " · organiser's choice" : "")),
+    h("div", { class: "card" }, h("p", {}, w.reason), h("div", { class: "mute" }, w.travel.map((t) => t.name + " " + t.minutes + " min").join(" · "))),
+    handoffButtons(picks.winner),
+    reportLink(w.id),
+    h("h1", { style: "margin-top:24px;font-size:17px" }, "How was it?"),
+    planStarted() ? [
+      h("div", { class: "chips" }, [["yes", "Went"], ["no", "Didn't go"], ["elsewhere", "Went elsewhere"]].map(([k, l]) => h("button", { class: "chip" + (went === k ? " on" : ""), onclick: () => { went = k; render(); } }, l))),
+      h("div", { class: "stars" }, [1, 2, 3, 4, 5].map((i) => h("button", { class: stars >= i ? "on" : "", "aria-label": i + " stars", onclick: () => { stars = i; render(); } }, "★"))),
+      h("button", { disabled: !went, onclick: async () => { try { await api("/ratings", { body: { went, stars: stars || null } }); err = ""; draw(h("h1", {}, "Thanks!"), h("p", { class: "sub" }, "Your answer helps improve the next picks.")); } catch (e) { err = e.message; render(); } } }, "Submit"),
+    ] : h("p", { class: "mute" }, "Come back to this page after the meal to say how it was."),
+    err ? h("div", { class: "err", role: "alert" }, err) : "",
+  ];
+}
+
+const remindNote = () => (me && me.reminder && plan.reminders ? h("div", { class: "note" }, "We'll text you once at " + clock(plan.reminders.at) + ", then delete your number.") : "");
+
+// Right to erasure (DPDP): a friend can delete their own answers from the browser that sent them.
+async function deleteMine() {
+  if (!confirm("Delete your answers (start point, budget, choices and any reminder number)? This can't be undone.")) return;
+  try {
+    const r = await fetch("/api/plans/" + planId + "/responses/me", { method: "DELETE", headers: { "x-member-key": me.key } });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "Couldn't delete");
+    try { localStorage.removeItem(KEY); } catch {}
+    me = null; picks = null; clearInterval(timer);
+    draw(h("h1", {}, "Your answers are deleted"), h("p", { class: "sub" }, "Nothing you entered is kept for this plan. If you had voted, your vote still counts, shown as \"A friend\"."));
+  } catch (e) { err = e.message; render(); }
+}
+const deleteLink = () => h("p", { class: "mute", style: "margin-top:24px;font-size:12px" },
+  h("a", { href: "/privacy", target: "_blank", rel: "noopener", style: "color:var(--mute)" }, "Privacy policy"), " · ",
+  h("a", { href: "#", style: "color:var(--mute)", onclick: (e) => { e.preventDefault(); deleteMine(); } }, "Delete my answers"));
+const mine = (...nodes) => draw(...nodes, deleteLink());
+
+function render() {
+  if (!plan) return;
+  if (!me) return draw(...(plan.status === "open" ? form() : [h("h1", {}, "This plan has moved on"), h("p", { class: "sub" }, "Ask " + plan.organiser + " for a new link.")]));
+  if (plan.status === "open") return mine(h("h1", {}, "Thanks, " + me.name + "!"), h("p", { class: "sub" }, "Picks arrive when everyone answers or at " + clock(plan.deadlineAt) + ". Keep this page open."), h("p", { class: "mute" }, plan.answered.length + " answered so far"), remindNote());
+  if (!picks) return;
+  if (picks.hidden) return mine(...hiddenScreen());
+  if (picks.status === "no_picks") return mine(h("h1", {}, "No place fits everyone"), h("p", { class: "sub" }, plan.organiser + " can widen the trip limit."));
+  if (picks.status === "decided") return mine(...winner(), remindNote());
+  mine(...voting());
+}
+async function refresh() {
+  try {
+    plan = await api("");
+    if (me && plan.status !== "open") picks = await api("/picks");
+  } catch (e) { err = e.message; }
+  render();
+}
+// Claim link (#claim=<key>): the organiser answered for you and forwarded this link. Take the answers over,
+// so you can vote, veto, rate or delete them yourself.
+async function claimFromLink() {
+  const m = /[#&]claim=([A-Za-z0-9_-]{10,64})/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, "", location.pathname); // don't leave the key in the address bar
+  try {
+    const r = await fetch("/api/plans/" + planId + "/me", { headers: { "x-member-key": m[1] } });
+    if (!r.ok) return;
+    const j = await r.json();
+    me = { key: m[1], name: j.name, reminder: false };
+    try { localStorage.setItem(KEY, JSON.stringify(me)); } catch {}
+  } catch {}
+}
+claimFromLink().then(refresh).then(() => {
+  // link_opened: once per browser per plan, only for someone who hasn't answered (bots without JS never count).
+  if (!plan || me || plan.status !== "open") return;
+  let seen = false; try { seen = !!localStorage.getItem("gd:opened:" + planId); localStorage.setItem("gd:opened:" + planId, "1"); } catch {}
+  if (!seen) track("link_opened");
+});
+// Poll only after answering; re-rendering the form would steal focus while someone types.
+timer = setInterval(() => { if (me && (!picks || picks.status !== "decided")) refresh(); }, 5000);
+</script>
+</body>
+</html>

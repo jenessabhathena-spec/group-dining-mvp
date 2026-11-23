@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Group Dining - Plan with friends</title>
+<style>
+  :root{--bg:#f4f1ec;--card:#fff;--ink:#1d1b19;--mute:#6b665f;--line:#e5dfd6;--acc:#c24410;--acc2:#fbe9e0;--ok:#237a4b}
+  @media (prefers-color-scheme:dark){:root{--bg:#171513;--card:#232019;--ink:#f3eee7;--mute:#a39c92;--line:#3a352d;--acc:#ff7a45;--acc2:#3a261b;--ok:#5fcf93}}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,sans-serif}
+  main{max-width:420px;margin:0 auto;padding:16px}
+  h1{font-size:21px;margin:0 0 4px}h2{font-size:15px;margin:20px 0 6px}.sub,.mute{color:var(--mute);font-size:14px}
+  label{display:block;font-weight:600;font-size:14px;margin:14px 0 4px}
+  input,select{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font-size:16px}
+  button,.btn{display:block;width:100%;padding:13px;margin-top:12px;border:0;border-radius:12px;background:var(--acc);color:#fff;font-weight:600;font-size:16px;cursor:pointer;text-align:center;text-decoration:none}
+  button.sec,.btn.sec{background:var(--card);color:var(--ink);border:1px solid var(--line)}button:disabled{opacity:.45;cursor:not-allowed}
+  .link{background:none;color:var(--mute);border:0;font-size:13px;width:auto;margin:16px 0 0;padding:0;font-weight:400;text-decoration:underline}
+  .card{border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0;background:var(--card)}
+  .card h3{margin:0 0 2px;font-size:17px}.badge{font-size:11px;padding:2px 7px;border-radius:99px;background:var(--acc2);color:var(--acc);font-weight:600}
+  .row{display:flex;gap:8px}.row>*{flex:1}.err{color:#b3261e;font-size:14px;margin-top:8px}.trade{color:#a05a00;font-size:13px}.ok{color:var(--ok)}
+  .note{background:var(--acc2);border-radius:10px;padding:8px 10px;font-size:13px;margin:8px 0}
+  .person{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+  .item{display:block;text-align:left;font-weight:400;background:var(--card);color:var(--ink);border:1px solid var(--line)}
+  .stars button{display:inline-block;width:auto;background:none;color:var(--line);font-size:26px;padding:0 4px;margin:0}.stars button.on{color:#f0a500}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite">Loading…</main>
+<script>
+const AREAS = ["Koramangala", "HSR Layout", "Indiranagar", "Domlur", "BTM Layout", "Jayanagar", "Marathahalli"];
+const app = document.getElementById("app");
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
+let token = store.get("gd:token");
+let view = { name: "boot" }, err = "", info = "", poll = null, home = null, plan = null, picks = null, share = null;
+
+const api = async (method, path, body) => {
+  const r = await fetch("/api" + path, { method, headers: { "content-type": "application/json", ...(token ? { authorization: "Bearer " + token } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && token) { token = null; store.set("gd:token", null); go({ name: "signin" }); throw new Error("Please sign in again"); }
+  if (!r.ok) throw new Error(j.error || "Something went wrong");
+  return j;
+};
+function h(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) { if (k === "class") e.className = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v === true) e.setAttribute(k, ""); else if (v !== false && v != null) e.setAttribute(k, v); }
+  for (const k of kids.flat(Infinity)) { if (k === "" || k == null) continue; e.append(k instanceof Node ? k : document.createTextNode(k)); }
+  return e;
+}
+// Analytics events (PRD section 9). plan_shared needs the organiser's token, so this uses fetch with keepalive.
+function track(planId, type, extra = {}) {
+  fetch(`/api/plans/${planId}/events`, { method: "POST", keepalive: true, headers: { "content-type": "application/json", ...(token ? { authorization: "Bearer " + token } : {}) }, body: JSON.stringify({ type, ...extra }) }).catch(() => {});
+}
+// F10 hand-offs: call, directions, booking app. A button appears only when the curated list has that link.
+function handoffRow(w, planId) {
+  const go = (kind) => () => track(planId, "handoff_clicked", { kind });
+  return h("div", { class: "row" },
+    w.callUrl ? h("a", { class: "btn sec", href: w.callUrl, onclick: go("call") }, "Call") : "",
+    w.directionsUrl ? h("a", { class: "btn sec", href: w.directionsUrl, target: "_blank", rel: "noopener", onclick: go("directions") }, "Directions") : "",
+    w.bookingUrl ? h("a", { class: "btn sec", href: w.bookingUrl, target: "_blank", rel: "noopener", onclick: go("booking") }, "Book") : "");
+}
+const draw = (...nodes) => app.replaceChildren(...nodes.flat(Infinity).filter((n) => n !== "" && n != null));
+const rupee = (n) => "₹" + Number(n).toLocaleString("en-IN");
+const errBox = () => (err ? h("div", { class: "err", role: "alert" }, err) : "");
+const infoBox = () => (info ? h("div", { class: "note" }, info) : "");
+const guard = (fn) => async (...a) => { err = ""; info = ""; try { await fn(...a); } catch (e) { err = e.message; render(); } };
+const nextSat = () => { const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return d.toISOString().slice(0, 10); };
+const input = (o) => h("input", { ...o, oninput: (e) => (form[o.id] = e.target.value) });
+const sel = (id, opts) => h("select", { id, onchange: (e) => (form[id] = e.target.value) }, opts.map(([v, l]) => h("option", { value: v, selected: String(form[id]) === String(v) }, l)));
+
+let form = {};
+function go(v) { clearInterval(poll); poll = null; view = v; err = ""; info = ""; render(); if (v.poll) poll = setInterval(v.poll, 5000); }
+
+/* ---------- views ---------- */
+function signin() {
+  const step = form.otpSent ? 2 : 1;
+  return [
+    h("h1", {}, "Sign in"), h("p", { class: "sub" }, "Organisers only. Your friends never need to sign in."),
+    h("p", { class: "mute" }, h("a", { href: "/privacy", target: "_blank", rel: "noopener", style: "color:var(--acc)" }, "Privacy policy")),
+    h("label", { for: "phone" }, "Phone number"), input({ id: "phone", type: "tel", inputmode: "numeric", autocomplete: "tel", placeholder: "98xxxxxxxx", value: form.phone || "" }),
+    step === 1 ? "" : [h("label", { for: "firstName" }, "Your first name"), input({ id: "firstName", autocomplete: "given-name", value: form.firstName || "" }),
+      h("label", { for: "code" }, "6-digit code"), input({ id: "code", inputmode: "numeric", autocomplete: "one-time-code", value: form.code || "" })],
+    infoBox(), errBox(),
+    h("button", { onclick: guard(async () => {
+      if (step === 1) { await api("POST", "/auth/request-otp", { phone: form.phone }); form.otpSent = true; info = "Code sent."; render(); }
+      else { const r = await api("POST", "/auth/verify", { phone: form.phone, code: form.code, firstName: form.firstName }); token = r.token; store.set("gd:token", token); form = {}; await loadHome(true); }
+    }) }, step === 1 ? "Send code" : "Verify"),
+  ];
+}
+
+let me = null;
+// After sign-in, a first-time organiser is offered the taste profile once. Saving or skipping both record it.
+async function loadHome(first) {
+  const [m, p] = await Promise.all([api("GET", "/me"), api("GET", "/plans")]);
+  me = m; home = p;
+  if (first === true && !me.profile) return openProfile(true); // === : click handlers pass an Event here
+  go({ name: "home" });
+}
+
+const LABELS = { "under-500": "Under ₹500", "500-800": "₹500-800", "800-1200": "₹800-1,200", "1200-plus": "₹1,200+" };
+function openProfile(first) {
+  const p = me.profile || {};
+  form = { p: { cuisines: p.cuisines || [], diet: p.diet || null, spice: p.spice || null, budgetBand: p.budgetBand || null, vibe: p.vibe || [], home: p.home || "", work: p.work || "" }, first, t0: Date.now() };
+  go({ name: "profile" });
+}
+const saveProfile = guard(async (skip) => {
+  const body = skip ? {} : { ...form.p, home: form.p.home || null, work: form.p.work || null };
+  body.secondsTaken = Math.round((Date.now() - form.t0) / 1000);
+  const r = await api("PUT", "/me/profile", body);
+  me.profile = r.profile; await loadHome(false);
+});
+
+function profileView() {
+  const f = form.p, o = me.options;
+  const multi = (key, opts, label) => h("div", { class: "chips" }, opts.map((v) => h("button", { class: "chip" + (f[key].includes(v) ? " on" : ""), type: "button", "aria-pressed": String(f[key].includes(v)), onclick: () => { f[key] = f[key].includes(v) ? f[key].filter((x) => x !== v) : [...f[key], v]; render(); } }, label ? label(v) : v)));
+  const single = (key, opts, label) => h("div", { class: "chips" }, opts.map((v) => h("button", { class: "chip" + (f[key] === v ? " on" : ""), type: "button", "aria-pressed": String(f[key] === v), onclick: () => { f[key] = f[key] === v ? null : v; render(); } }, label ? label(v) : v)));
+  const area = (key) => h("select", { id: key, onchange: (e) => (f[key] = e.target.value) }, h("option", { value: "" }, "Skip"), o.areas.map((a) => h("option", { selected: f[key] === a }, a)));
+  return [
+    form.first ? "" : h("button", { class: "link", onclick: () => go({ name: "home" }) }, "← Back"),
+    h("h1", {}, form.first ? "Your taste" : "Edit your taste"), h("p", { class: "sub" }, "6 quick questions. Skip any. It saves you typing on every plan."),
+    h("h2", {}, "Cuisines you like"), multi("cuisines", o.cuisines),
+    h("h2", {}, "Diet"), single("diet", o.diets), h("p", { class: "mute" }, "Veg, vegan or Jain is treated as a must-have for every plan you start."),
+    h("h2", {}, "Spice"), single("spice", o.spices),
+    h("h2", {}, "Budget per person"), single("budgetBand", o.budgetBands, (v) => LABELS[v]), h("p", { class: "mute" }, "Private. Your friends never see it, and it is never shown as yours."),
+    h("h2", {}, "Vibe"), multi("vibe", o.vibes),
+    h("div", { class: "two" }, h("div", {}, h("h2", {}, "Home area"), area("home")), h("div", {}, h("h2", {}, "Work area"), area("work"))),
+    errBox(),
+    h("button", { onclick: () => saveProfile(false) }, "Save"),
+    form.first ? h("button", { class: "sec", onclick: () => saveProfile(true) }, "Skip for now") : "",
+  ];
+}
+
+function homeView() {
+  return [
+    h("h1", {}, "Hi" + (home.firstName ? " " + home.firstName : "")), h("p", { class: "sub" }, "What are we planning?"),
+    me.profile ? "" : h("div", { class: "note" }, "Set up your taste profile once and plans need far less typing."),
+    h("button", { onclick: guard(async () => { await loadWant(); form = { occasion: "Friends hangout", date: nextSat(), time: "20:00", area: "anywhere", friends: "", candidateIds: [], organiserArea: (me.profile && me.profile.home) || "Koramangala", organiserBudget: "", travelLimitMin: 40, deadlineHours: 2 }; go({ name: "new" }); }) }, "Plan with friends"),
+    h("button", { class: "sec", onclick: guard(openSolo) }, "Find something new (just me)"),
+    h("button", { class: "sec", onclick: guard(openPlaces) }, "My places (want to try, been there)"),
+    h("button", { class: "sec", onclick: () => openProfile(false) }, me.profile ? "Edit taste profile" : "Set up taste profile"),
+    h("button", { class: "sec", onclick: guard(async () => { await loadWant(); form = { mode: "couple", occasion: "Date night", date: nextSat(), time: "20:00", area: "anywhere", friends: "", candidateIds: [], ambience: [], noise: "", surprise: "", organiserArea: (me.profile && me.profile.home) || "Koramangala", organiserBudget: "", travelLimitMin: 40, deadlineHours: 6 }; go({ name: "new" }); }) }, "Date night (2 people)"),
+    h("h2", {}, "Your plans"),
+    home.plans.length ? home.plans.map((p) => h("button", { class: "item", onclick: guard(() => openPlan(p.id)) }, h("b", {}, p.occasion), h("div", { class: "mute" }, `${p.date} · ${p.time} · ${p.status}`))) : h("p", { class: "mute" }, "No plans yet."),
+    h("button", { class: "link", onclick: async () => { try { await api("POST", "/auth/logout"); } catch {} token = null; store.set("gd:token", null); form = {}; go({ name: "signin" }); } }, "Sign out"),
+    h("button", { class: "link", onclick: guard(async () => { if (confirm("Delete your account and all your plans? This cannot be undone.")) { await api("DELETE", "/me"); token = null; store.set("gd:token", null); form = {}; go({ name: "signin" }); } }) }, "Delete my data"),
+    errBox(),
+  ];
+}
+
+// Search for a start point (Google behind our server when configured, built-in areas otherwise).
+const newToken = () => (crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join(""));
+let sessionToken = newToken();
+function startSearch() {
+  const box = h("div", { class: "card" });
+  if (form.organiserStart) {
+    box.append(h("div", {}, "📍 ", h("b", {}, form.organiserStart.label || "Selected place")), h("button", { type: "button", class: "sec", onclick: () => { form.organiserStart = null; render(); } }, "Change"));
+    return box;
+  }
+  const input = h("input", { id: "startq", type: "search", autocomplete: "off", placeholder: "Search a place or area", "aria-label": "Search where you'll start from", "aria-controls": "startlist" });
+  const list = h("div", { id: "startlist", role: "listbox", "aria-label": "Suggestions" });
+  const msg = h("p", { class: "mute", role: "status" });
+  let timer, seq = 0;
+  const pick = async (r) => {
+    msg.textContent = "Looking that up…";
+    try {
+      const j = await api("GET", `/places/details?id=${encodeURIComponent(r.id)}&token=${sessionToken}`);
+      form.organiserStart = { lat: j.lat, lng: j.lng, label: r.label };
+      sessionToken = newToken();
+      render();
+    } catch (e) { msg.textContent = e.message; }
+  };
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const text = input.value.trim(), mine = ++seq;
+    if (text.length < 2) { list.replaceChildren(); msg.textContent = ""; return; }
+    timer = setTimeout(async () => {
+      try {
+        const j = await api("GET", `/places/search?q=${encodeURIComponent(text)}&token=${sessionToken}`);
+        if (mine !== seq) return;
+        list.replaceChildren(...j.results.map((r) => h("button", { type: "button", role: "option", class: "sec", style: "text-align:left;font-weight:400", onclick: () => pick(r) }, h("b", {}, r.label), r.secondary ? h("div", { class: "mute" }, r.secondary) : "")));
+        msg.textContent = j.results.length ? (j.source === "google" ? "Powered by Google" : "") : "No match. Try another word, or choose an area below.";
+      } catch (e) { if (mine === seq) { list.replaceChildren(); msg.textContent = e.message; } }
+    }, 250);
+  });
+  const here = h("button", { type: "button", class: "sec", onclick: () => {
+    if (!navigator.geolocation) { msg.textContent = "Your browser can't share a location."; return; }
+    msg.textContent = "Finding you…";
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { form.organiserStart = { lat: pos.coords.latitude, lng: pos.coords.longitude, label: "Your current location" }; render(); },
+      () => { msg.textContent = "Couldn't get your location. Search or choose an area instead."; },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 });
+  } }, "📍 Use my current location");
+  box.append(input, list, msg, here);
+  return box;
+}
+
+// With a saved home area, start point and budget come from the profile and tuck away (fewer taps).
+function startAndBudget() {
+  const pr = me.profile || {};
+  const starts = [...new Set([pr.home, pr.work, ...AREAS].filter(Boolean))].map((a) => [a, a === pr.home ? a + " (home)" : a === pr.work ? a + " (work)" : a]);
+  const body = [
+    h("label", { for: "startq" }, "You'll start from"), startSearch(),
+    h("label", { for: "organiserArea", class: "mute", style: "font-weight:400" }, "…or choose an area"), sel("organiserArea", starts),
+    h("label", { for: "organiserBudget" }, "Your max per person (private, optional)"),
+    input({ id: "organiserBudget", type: "number", inputmode: "numeric", placeholder: pr.budgetBand ? "Using your profile: " + LABELS[pr.budgetBand] : "", value: form.organiserBudget }),
+  ];
+  const where = form.organiserStart ? form.organiserStart.label : form.organiserArea;
+  return pr.home ? h("details", {}, h("summary", { class: "mute" }, `Starting from ${where}${pr.budgetBand ? ", budget from your profile" : ""}`), body) : body;
+}
+
+/* ---------- My places (F14): want-to-try and been-there ---------- */
+let want = [];
+async function loadWant() { const r = await api("GET", "/me/places"); want = r.want; been = r.been; }
+async function openPlaces() { await loadWant(); go({ name: "places" }); }
+const placeAct = (rid, status) => guard(async () => { await api("POST", "/me/places", { restaurantId: rid, status }); await loadWant(); render(); });
+
+function placesView() {
+  const row = (p, actions) => h("div", { class: "card" }, h("b", {}, p.name), h("div", { class: "mute" }, `${p.area} · ${rupee(p.pricePerHead)} a head`), h("div", { class: "row" }, actions));
+  return [
+    h("button", { class: "link", onclick: () => go({ name: "home" }) }, "← Back"),
+    h("h1", {}, "My places"),
+    h("h2", {}, `Want to try (${want.length})`),
+    want.length ? want.map((p) => row(p, [h("button", { onclick: placeAct(p.id, "been") }, "Been there"), h("button", { class: "sec", onclick: placeAct(p.id, null) }, "Remove")]))
+      : h("p", { class: "mute" }, "Nothing saved yet. Tap \"Save for later\" on a place in Find something new, then add it to a group plan."),
+    h("h2", {}, `Been there (${been.length})`),
+    h("p", { class: "mute" }, "These are never suggested as something new."),
+    been.length ? been.map((p) => row(p, [h("button", { class: "sec", onclick: placeAct(p.id, null) }, "Remove")])) : h("p", { class: "mute" }, "None yet."),
+    errBox(),
+  ];
+}
+
+/* ---------- Find something new (solo, F13) ---------- */
+let soloData = null, been = [];
+async function openSolo() {
+  const pr = me.profile || {};
+  form = { startArea: pr.home || "Koramangala", area: "anywhere", time: "20:00" };
+  await runSolo();
+  go({ name: "solo" });
+}
+async function runSolo() {
+  const [r, b] = await Promise.all([
+    api("POST", "/solo/picks", { startArea: form.startArea, area: form.area, time: form.time }),
+    api("GET", "/me/places"),
+  ]);
+  soloData = r; been = b.been;
+}
+const soloAct = (fn) => guard(async () => { await fn(); await runSolo(); render(); });
+
+function soloView() {
+  const pr = me.profile || {};
+  const starts = [...new Set([pr.home, pr.work, ...AREAS].filter(Boolean))];
+  return [
+    h("button", { class: "link", onclick: () => go({ name: "home" }) }, "← Back"),
+    h("h1", {}, "Find something new"), h("p", { class: "sub" }, "Three places you haven't been to, picked from your taste."),
+    soloData.hasProfile ? "" : h("div", { class: "note" }, "Set up your taste profile and these picks will fit you much better."),
+    h("div", { class: "two" },
+      h("div", {}, h("label", { for: "startArea" }, "Starting from"), h("select", { id: "startArea", onchange: soloAct(async (e) => { form.startArea = e.target.value; }) }, starts.map((a) => h("option", { selected: form.startArea === a }, a)))),
+      h("div", {}, h("label", { for: "area" }, "Where?"), h("select", { id: "area", onchange: soloAct(async (e) => { form.area = e.target.value; }) }, [["anywhere", "Anywhere"], ["Koramangala", "Koramangala"], ["HSR Layout", "HSR Layout"], ["Indiranagar", "Indiranagar"]].map(([v, l]) => h("option", { value: v, selected: form.area === v }, l))))),
+    h("label", { for: "time" }, "Time"), h("input", { id: "time", type: "time", value: form.time, onchange: soloAct(async (e) => { form.time = e.target.value; }) }),
+    errBox(),
+    soloData.notes.map((n) => h("div", { class: "note" }, n)),
+    soloData.picks.length ? "" : h("div", { class: "note" }, "Nothing new fits right now. Try another area or time, or take a place off your been-there list below."),
+    soloData.picks.map((p) => h("div", { class: "card" },
+      h("h3", {}, p.name, " ", p.partner ? h("span", { class: "badge" }, "Partner") : ""),
+      h("div", { class: "mute" }, `${p.area} · ${rupee(p.pricePerHead)} a head`), h("p", {}, p.reason),
+      p.tradeoffs.map((t) => h("div", { class: "trade" }, t)),
+      h("div", { class: "row" },
+        p.callUrl ? h("a", { class: "btn sec", href: p.callUrl }, "Call") : "",
+        h("a", { class: "btn", href: p.directionsUrl, target: "_blank", rel: "noopener" }, "Directions"),
+        h("button", { class: "sec", onclick: soloAct(() => api("POST", "/me/places", { restaurantId: p.id, status: "been" })) }, "Been there")),
+      reportLink(p.id),
+      h("button", { class: "sec", onclick: soloAct(() => api("POST", "/me/places", { restaurantId: p.id, status: p.saved ? null : "want" })) }, p.saved ? "Saved ✓ (tap to remove)" : "Save for later"))),
+    soloData.nearMisses.length ? [h("h2", {}, "Nearest misses"), soloData.nearMisses.map((m) => h("div", { class: "card" }, h("b", {}, m.name), " ", h("span", { class: "mute" }, m.area), m.broken.map((b) => h("div", { class: "trade" }, b.detail))))] : "",
+    h("button", { class: "sec", onclick: guard(async () => { await runSolo(); render(); }) }, "Refresh"),
+    h("details", {}, h("summary", { class: "mute" }, `Places you've been (${been.length})`),
+      been.length ? been.map((b) => h("div", { class: "person" }, h("span", {}, `${b.name} · ${b.area}`), h("button", { class: "link", style: "margin:0", onclick: soloAct(() => api("POST", "/me/places", { restaurantId: b.id, status: null })) }, "Remove"))) : h("p", { class: "mute" }, "None yet.")),
+  ];
+}
+
+const fmtDay = (ms) => new Date(ms).toLocaleDateString([], { weekday: "long", day: "numeric", month: "short" });
+const hiddenNotice = (name) => [
+  h("button", { class: "link", onclick: guard(loadHome) }, "← Plans"),
+  h("h1", {}, "It's a surprise"), h("p", { class: "sub" }, `${plan.surpriseFor === "organiser" ? "Your partner is" : "Someone is"} choosing the place. You'll see it on ${fmtDay(picks.revealAt)}.`),
+  h("div", { class: "note" }, "Nothing about the picks is sent to this device until then."),
+];
+
+function coupleFields() {
+  const f = form;
+  return [
+    h("label", { for: "friends" }, "Your partner's first name"), input({ id: "friends", autocomplete: "off", value: f.friends }),
+    h("label", {}, "Ambience (pick any)"),
+    h("div", { class: "chips" }, ["quiet", "chill", "fancy", "lively"].map((v) => h("button", { type: "button", class: "chip" + (f.ambience.includes(v) ? " on" : ""), "aria-pressed": String(f.ambience.includes(v)), onclick: () => { f.ambience = f.ambience.includes(v) ? f.ambience.filter((x) => x !== v) : [...f.ambience, v]; render(); } }, v))),
+    h("label", { for: "noise" }, "Noise"), sel("noise", [["", "Any"], ["medium", "Not loud"], ["quiet", "Quiet only"]]),
+    h("label", { for: "surprise" }, "Surprise"), sel("surprise", [["", "No surprise, we both vote"], ["partner", "Surprise my partner (hidden from them until the day)"], ["organiser", "Surprise me (my partner chooses, hidden from me until the day)"]]),
+  ];
+}
+
+// Saved places can be added to this plan's candidates. They are judged like every other place:
+// same filters, same fairness, no ranking boost, and some may not make the cut.
+function candidatePicker() {
+  if (!want.length) return "";
+  const on = (id) => form.candidateIds.includes(id);
+  const toggle = (id) => { if (on(id)) form.candidateIds = form.candidateIds.filter((x) => x !== id); else if (form.candidateIds.length < 5) form.candidateIds = [...form.candidateIds, id]; render(); };
+  return [
+    h("label", {}, "Add places from your want-to-try list"),
+    h("div", { class: "chips" }, want.map((p) => h("button", { type: "button", class: "chip" + (on(p.id) ? " on" : ""), "aria-pressed": String(on(p.id)), onclick: () => toggle(p.id) }, p.name))),
+    h("p", { class: "mute" }, "They join the options even outside the area, but must still suit everyone's trip, food and budget. No special treatment."),
+  ];
+}
+
+function newPlan() {
+  const couple = form.mode === "couple";
+  return [
+    h("button", { class: "link", onclick: () => go({ name: "home" }) }, "← Back"),
+    h("h1", {}, couple ? "Date night" : "New plan"),
+    couple ? "" : [h("label", { for: "occasion" }, "Occasion"), sel("occasion", ["Friends hangout", "Birthday", "Catch-up", "Celebration"].map((x) => [x, x]))],
+    h("div", { class: "two" }, h("div", {}, h("label", { for: "date" }, "Date"), input({ id: "date", type: "date", value: form.date })), h("div", {}, h("label", { for: "time" }, "Time"), input({ id: "time", type: "time", value: form.time }))),
+    h("label", { for: "area" }, "Where?"), sel("area", [["anywhere", "Anywhere fair"], ["Koramangala", "Koramangala"], ["HSR Layout", "HSR Layout"], ["Indiranagar", "Indiranagar"]]),
+    couple ? coupleFields() : [h("label", { for: "friends" }, "Friends' first names (comma separated)"), input({ id: "friends", placeholder: "Riya, Arjun, Meera", value: form.friends })],
+    candidatePicker(),
+    h("label", { style: "display:flex;gap:8px;font-weight:400;font-size:14px;margin-top:14px" }, h("input", { type: "checkbox", checked: form.reminders !== false, onchange: (e) => (form.reminders = e.target.checked) }), "Text reminders 3 hours before (you, and friends who opt in)"),
+    startAndBudget(),
+    h("div", { class: "two" }, h("div", {}, h("label", { for: "deadlineHours" }, "Answer within"), sel("deadlineHours", [[1, "1 hour"], [2, "2 hours"], [6, "6 hours"], [24, "1 day"]])), h("div", {}, h("label", { for: "travelLimitMin" }, "Max trip (min)"), input({ id: "travelLimitMin", type: "number", min: 10, max: 90, value: form.travelLimitMin }))),
+    errBox(),
+    h("button", { onclick: guard(async () => {
+      const friends = String(form.friends || "").split(",").map((s) => s.trim()).filter(Boolean);
+      const body = { occasion: form.occasion, date: form.date, time: form.time, area: form.area, friends, organiserArea: form.organiserArea, organiserBudget: form.organiserBudget || null, travelLimitMin: Number(form.travelLimitMin), deadlineHours: Number(form.deadlineHours) };
+      if (form.candidateIds && form.candidateIds.length) body.candidateIds = form.candidateIds;
+      if (form.reminders === false) body.reminders = false;
+      if (form.organiserStart) { body.organiserStart = { lat: form.organiserStart.lat, lng: form.organiserStart.lng }; delete body.organiserArea; }
+      if (form.mode === "couple") Object.assign(body, { mode: "couple", ambience: form.ambience, noise: form.noise || null, surprise: form.surprise || null });
+      const r = await api("POST", "/plans", body);
+      share = r; await openPlan(r.id, true);
+    }) }, "Create and share"),
+  ];
+}
+
+async function openPlan(id, justCreated) {
+  plan = await api("GET", "/plans/" + id);
+  if (plan.status === "open" || plan.status === "no_picks") return go({ name: "status", id, justCreated, poll: guard(async () => { const was = plan.answered.length; plan = await api("GET", "/plans/" + id); if (plan.status !== "open" && plan.status !== "no_picks") await openPlan(id); else if (view.name === "status" && plan.answered.length !== was) render(); }) });
+  picks = await api("GET", `/plans/${id}/picks`);
+  go({ name: picks.status === "decided" ? "winner" : "picks", id, poll: guard(async () => { picks = await api("GET", `/plans/${id}/picks`); const prev = JSON.stringify([picks.voted, picks.vetoUsed, picks.status]); picks = await api("GET", `/plans/${id}/picks`); if ((picks.status === "decided") !== (view.name === "winner")) return openPlan(id); if (prev !== JSON.stringify([picks.voted, picks.vetoUsed, picks.status])) render(); }) });
+}
+
+const shareLink = (id) => (share && share.id === id ? share : { url: location.origin + "/p/" + id, whatsapp: "https://wa.me/?text=" + encodeURIComponent(`Dinner plan: ${plan.occasion}, ${plan.date} at ${plan.time}. 30 seconds, no sign-in, your budget stays private: ${location.origin}/p/${id}`) });
+
+function status() {
+  const s = shareLink(view.id), n = plan.answered.length, need = plan.mode === "couple" ? 1 : 2;
+  return [
+    h("button", { class: "link", onclick: guard(loadHome) }, "← Plans"),
+    h("h1", {}, plan.occasion), h("p", { class: "sub" }, `${plan.date} · ${plan.time} · answers close ${new Date(plan.deadlineAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}`),
+    view.justCreated ? h("div", { class: "note" }, "Plan created. Share the link so your friends can answer.") : "",
+    h("a", { class: "btn", href: s.whatsapp, target: "_blank", rel: "noopener", onclick: () => track(view.id, "plan_shared", { channel: "whatsapp" }) }, "Share on WhatsApp"),
+    h("button", { class: "sec", onclick: async () => { track(view.id, "plan_shared", { channel: "copy" }); try { await navigator.clipboard.writeText(s.url); info = "Link copied."; } catch { info = s.url; } render(); } }, "Copy link"),
+    h("h2", {}, "Who has answered"), h("p", { class: "mute" }, "You see who answered, never what they said."),
+    h("div", {}, plan.answered.map((a) => h("div", { class: "person" }, h("span", {}, a), h("span", { class: "ok" }, "✓ answered"))), plan.pending.map((a) => h("div", { class: "person" }, h("span", {}, a), h("span", {}, h("span", { class: "mute" }, "waiting… "),
+      plan.status === "open" ? h("button", { class: "link", style: "margin:0", onclick: () => { form = { who: a, area: AREAS[0], budget: "", dealbreakers: [], mood: "chill", ok: false }; go({ name: "answerFor", id: view.id }); } }, "Answer for them") : "")))),
+    plan.status === "no_picks" ? h("div", { class: "note" }, plan.mode === "couple" ? "No place matches your filters. Loosen them below, or allow a longer trip." : "No place fits everyone. Try a longer trip limit below.") : "",
+    plan.status === "no_picks" && plan.mode === "couple" ? h("button", { class: "sec", onclick: guard(async () => { picks = await api("POST", `/plans/${view.id}/picks`, { noise: null, ambience: [] }); await openPlan(view.id); }) }, "Drop the ambience and noise filters") : "",
+    plan.status === "no_picks" ? [h("label", { for: "travelLimitMin" }, "Max trip (min)"), input({ id: "travelLimitMin", type: "number", min: 10, max: 90, value: form.travelLimitMin || 60 })] : "",
+    infoBox(), errBox(),
+    h("button", { disabled: n < need, onclick: guard(async () => { picks = await api("POST", `/plans/${view.id}/picks`, plan.status === "no_picks" ? { travelLimitMin: Number(form.travelLimitMin || 60) } : {}); await openPlan(view.id); }) }, plan.status === "no_picks" ? "Try again" : n >= need ? (need === 1 ? "Get picks now" : `Get picks now (${n} answered)`) : "Get picks now"),
+    n < need ? h("p", { class: "mute" }, need === 1 ? "Picks arrive automatically as soon as your partner answers." : "Needs 2+ friends to answer first. Picks also arrive automatically when everyone answers or time runs out.") : "",
+  ];
+}
+
+function picksView() {
+  if (picks.hidden) return hiddenNotice();
+  const couple = picks.mode === "couple", solo = couple && picks.surprise; // surprise: the planning partner's single vote decides
+  const voted = picks.voted.length, total = picks.members.length;
+  const meVoted = picks.voted.includes(plan.organiser), meVeto = picks.vetoUsed.includes(plan.organiser);
+  const act = (kind, pickId, extra = {}) => guard(async () => { picks = await api("POST", `/plans/${view.id}/${kind}`, { pickId, ...extra }); await openPlan(view.id); });
+  // Optional veto reason (PRD open question). Never shown to the group.
+  const askReason = (pickId) => (e) => {
+    const reasons = [["too_far", "Too far"], ["too_pricey", "Too pricey"], ["not_my_food", "Not my food"], ["other", "Other"]];
+    e.currentTarget.closest(".row").replaceWith(h("div", {}, h("p", { class: "mute" }, "Why veto it? (optional, only used to improve picks)"),
+      h("div", { class: "chips" }, reasons.map(([k, l]) => h("button", { type: "button", class: "chip", onclick: act("vetoes", pickId, { reason: k }) }, l))),
+      h("button", { type: "button", class: "sec", onclick: act("vetoes", pickId) }, "Just veto")));
+  };
+  return [
+    h("button", { class: "link", onclick: guard(loadHome) }, "← Plans"),
+    h("h1", {}, "Pick one"), h("p", { class: "sub" }, solo ? "Your vote decides. You also have one veto." : `${voted}/${total} voted · one vote and one veto each`),
+    solo ? h("div", { class: "note" }, `Hidden from ${picks.surprise.hiddenFrom} until ${fmtDay(picks.surprise.revealAt)}. Don't spoil it!`) : h("p", { class: "mute" }, couple ? "Your partner votes on their own link. You vote here." : "Friends vote on their own link. You vote here."),
+    budgetLine(picks),
+    picks.notes.map((n) => h("div", { class: "note" }, n)),
+    picks.picks.map((p) => h("div", { class: "card" },
+      h("h3", {}, p.name, " ", p.partner ? h("span", { class: "badge" }, "Partner") : "", p.fromWantList ? h("span", { class: "badge" }, "From your list") : ""),
+      h("div", { class: "mute" }, `${p.area} · ${rupee(p.pricePerHead)} a head`), h("p", {}, p.reason),
+      h("div", { class: "mute" }, p.travel.map((t) => `${t.name} ${t.minutes} min`).join(" · ")), p.tradeoffs.map((t) => h("div", { class: "trade" }, t)),
+      h("div", { class: "row" }, h("button", { disabled: meVoted, onclick: act("votes", p.id) }, meVoted ? "Voted" : "Vote"), h("button", { class: "sec", disabled: meVeto, onclick: askReason(p.id) }, "Veto")),
+      reportLink(p.id, view.id))),
+    picks.nearMisses.length ? [h("h2", {}, "Nearest misses"), picks.nearMisses.map((m) => h("div", { class: "card" }, h("b", {}, m.name), " ", h("span", { class: "mute" }, m.area), m.broken.map((b) => h("div", { class: "trade" }, b.detail))))] : "",
+    errBox(),
+    solo ? "" : h("button", { class: "sec", onclick: guard(async () => { picks = await api("POST", `/plans/${view.id}/decide`, {}); await openPlan(view.id); }) }, "Close voting now"),
+    solo ? "" : h("details", {}, h("summary", { class: "mute" }, "Override the result (logged)"), picks.picks.map((p) => h("button", { class: "sec", onclick: guard(async () => { if (confirm("Choose " + p.name + " regardless of votes?")) { picks = await api("POST", `/plans/${view.id}/decide`, { overridePickId: p.id }); await openPlan(view.id); } }) }, "Choose " + p.name))),
+  ];
+}
+
+const timeOf = (ms) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+// Honest about what will happen: reminders go to you (and friends who opted in) 3 hours before.
+function reminderLine() {
+  const r = plan.reminders;
+  if (!r) return "";
+  if (!r.enabled) return h("p", { class: "mute" }, "No reminder will be sent for this plan.");
+  return h("div", { class: "note" }, `We'll text you a reminder with directions at ${timeOf(r.at)}.` + (picks.surprise && !picks.surprise.revealed ? ` ${picks.surprise.hiddenFrom} only gets the time until the reveal.` : ""));
+}
+
+let went = "", stars = 0;
+function winnerView() {
+  if (picks.hidden) return hiddenNotice();
+  const w = picks.winner.pick;
+  const secret = picks.surprise && !picks.surprise.revealed; // planner: don't offer sharing a surprise
+  const sharing = secret ? [h("div", { class: "note" }, `Keep it secret until ${fmtDay(picks.surprise.revealAt)}. ${picks.surprise.hiddenFrom} will see it then.`)] : [];
+  const msg = `We're going to ${w.name} (${w.area}), ${plan.date} at ${plan.time}. ${w.reason}`;
+  const started = Date.now() >= Date.parse(`${plan.date}T${plan.time}:00+05:30`);
+  return [
+    h("button", { class: "link", onclick: guard(loadHome) }, "← Plans"),
+    h("h1", {}, "It's " + w.name + "!"), h("p", { class: "sub" }, `${w.area} · ${rupee(w.pricePerHead)} a head${picks.winner.overridden ? " · organiser's choice" : ""}`),
+    h("div", { class: "card" }, h("p", {}, w.reason), h("div", { class: "mute" }, w.travel.map((t) => `${t.name} ${t.minutes} min`).join(" · ")), w.partner ? h("span", { class: "badge" }, "Partner") : ""),
+    ...sharing,
+    reminderLine(),
+    secret ? "" : h("a", { class: "btn", href: "https://wa.me/?text=" + encodeURIComponent(msg), target: "_blank", rel: "noopener" }, "Share to WhatsApp"),
+    handoffRow(picks.winner, view.id),
+    reportLink(w.id, view.id),
+    h("h2", {}, "How was it?"),
+    // F11: a post-visit check, so it opens once the plan's time has come. A text nudges you the next day.
+    started ? [
+      h("div", { class: "row" }, [["yes", "Went"], ["no", "Didn't go"], ["elsewhere", "Elsewhere"]].map(([k, l]) => h("button", { class: went === k ? "" : "sec", onclick: () => { went = k; render(); } }, l))),
+      h("div", { class: "stars" }, [1, 2, 3, 4, 5].map((i) => h("button", { class: stars >= i ? "on" : "", "aria-label": i + " stars", onclick: () => { stars = i; render(); } }, "★"))),
+      infoBox(), errBox(),
+      h("button", { disabled: !went, onclick: guard(async () => { await api("POST", `/plans/${view.id}/ratings`, { went, stars: stars || null }); info = "Thanks, saved."; render(); }) }, "Submit"),
+      // Friends' numbers are long gone by now, so the organiser passes the question on to the group.
+      h("a", { class: "btn sec", href: "https://wa.me/?text=" + encodeURIComponent(`How was ${w.name}? Tap to say if you went and rate it (takes 5 seconds): ${location.origin}/p/${view.id}`), target: "_blank", rel: "noopener" }, "Ask the group on WhatsApp"),
+    ] : [h("p", { class: "mute" }, `Opens after the meal${plan.reminders && plan.reminders.enabled ? ". We'll text you a nudge the next morning." : "."}`), errBox()],
+  ];
+}
+
+// PRD risk mitigation: a friend ignores the link and replies in the chat, so the organiser enters their
+// answers. The organiser confirms they have the friend's okay, and gets a link to forward so the friend can
+// check, vote or delete. The organiser never gets the friend's key to vote with.
+function answerForView() {
+  const f = form;
+  if (f.done) return [
+    h("h1", {}, `Saved ${f.who}'s answers`),
+    h("p", { class: "sub" }, `Send ${f.who} this link so they can check the answers, vote and veto themselves.`),
+    h("a", { class: "btn", href: f.done.whatsapp, target: "_blank", rel: "noopener" }, `Send to ${f.who} on WhatsApp`),
+    h("button", { class: "sec", onclick: async () => { try { await navigator.clipboard.writeText(f.done.claimUrl); info = "Link copied."; } catch { info = f.done.claimUrl; } render(); } }, "Copy link"),
+    infoBox(),
+    h("button", { class: "sec", onclick: guard(() => openPlan(view.id)) }, "Back to the plan"),
+  ];
+  const dbs = [["needs-veg", "Needs veg"], ["needs-vegan", "Vegan"], ["needs-jain", "Jain"], ["no-alcohol", "No bar-led places"], ["no-loud", "Not loud"]];
+  return [
+    h("button", { class: "link", onclick: guard(() => openPlan(view.id)) }, "← Plan"),
+    h("h1", {}, `Answer for ${f.who}`), h("p", { class: "sub" }, `Use what ${f.who} told you. Their budget stays private from everyone else.`),
+    h("label", { for: "area" }, `Where will ${f.who} start from?`), sel("area", AREAS.map((a) => [a, a])),
+    h("label", { for: "budget" }, "Their max per person (optional)"), input({ id: "budget", type: "number", inputmode: "numeric", value: f.budget }),
+    h("label", {}, "Dealbreakers"),
+    h("div", { class: "chips" }, dbs.map(([k, l]) => h("button", { type: "button", class: "chip" + (f.dealbreakers.includes(k) ? " on" : ""), onclick: () => { f.dealbreakers = f.dealbreakers.includes(k) ? f.dealbreakers.filter((x) => x !== k) : [...f.dealbreakers, k]; render(); } }, l))),
+    h("label", {}, "Mood"),
+    h("div", { class: "chips" }, ["lively", "chill", "fancy", "quick", "quiet"].map((m) => h("button", { type: "button", class: "chip" + (f.mood === m ? " on" : ""), onclick: () => { f.mood = m; render(); } }, m))),
+    h("label", { style: "display:flex;gap:8px;font-weight:400;font-size:14px;margin-top:14px" }, h("input", { type: "checkbox", checked: f.ok, onchange: (e) => (f.ok = e.target.checked) }), `${f.who} told me these answers and is okay with me entering them.`),
+    errBox(),
+    h("button", { onclick: guard(async () => {
+      const r = await api("POST", `/plans/${view.id}/responses`, { onBehalf: true, organiserConsent: f.ok, name: f.who, area: f.area, budget: f.budget || null, dealbreakers: f.dealbreakers, mood: f.mood });
+      f.done = r; render();
+    }) }, "Save answers"),
+  ];
+}
+
+// PRD content rule: budgets only ever appear as a shared range built from the picks on screen.
+function budgetLine(pk) {
+  const prices = pk.picks.map((p) => p.pricePerHead);
+  if (!prices.length) return "";
+  const lo = Math.min(...prices), hi = Math.max(...prices);
+  const range = lo === hi ? rupee(lo) : rupee(lo) + "-" + rupee(hi).replace("₹", "");
+  const tail = pk.budgetScope === "all" ? " a head works for all" : pk.budgetScope === "given" ? " a head, within every budget given" : " a head";
+  return h("div", { class: "note" }, range + tail);
+}
+
+// "Closed or changed?" on every card. Goes to the weekly curation review (GET /api/admin/reports).
+function reportLink(restaurantId, planId) {
+  const wrap = h("div", { class: "mute", style: "font-size:12px;margin-top:6px" });
+  const send = async (kind) => {
+    try { await api("POST", "/reports", { restaurantId, planId: planId || undefined, kind }); wrap.replaceChildren("Thanks, we'll check it."); }
+    catch (e) { wrap.replaceChildren(e.message); }
+  };
+  wrap.append(h("a", { href: "#", style: "color:var(--mute)", onclick: (e) => { e.preventDefault();
+    wrap.replaceChildren("What's wrong? ", ...[["closed", "Closed"], ["changed", "Prices or menu changed"], ["other", "Something else"]].flatMap(([k, l], i) => [i ? " · " : "", h("a", { href: "#", style: "color:var(--acc)", onclick: (ev) => { ev.preventDefault(); send(k); } }, l)]));
+  } }, "Closed or changed?"));
+  return wrap;
+}
+
+function render() {
+  const v = { signin, home: () => homeView(), profile: profileView, solo: soloView, places: placesView, new: newPlan, status, picks: picksView, winner: winnerView, answerFor: answerForView }[view.name];
+  if (v) draw(...v());
+}
+
+(async () => {
+  if (!token) return go({ name: "signin" });
+  try {
+    await loadHome(true);
+    // Deep link from the next-day "How was it?" text: /?plan=<id>
+    const deep = new URLSearchParams(location.search).get("plan");
+    if (deep && view.name === "home") { history.replaceState(null, "", "/"); await openPlan(deep); }
+  } catch { go({ name: "signin" }); }
+})();
+</script>
+</body>
+</html>

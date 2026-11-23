@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Group Dining MVP - Prototype</title>
+<style>
+  :root{--bg:#f4f1ec;--card:#fff;--ink:#1d1b19;--mute:#6b665f;--line:#e5dfd6;--acc:#d9531e;--acc2:#fbe9e0;--ok:#237a4b;--warn:#a05a00}
+  @media (prefers-color-scheme:dark){:root{--bg:#171513;--card:#232019;--ink:#f3eee7;--mute:#a39c92;--line:#3a352d;--acc:#ff7a45;--acc2:#3a261b;--ok:#5fcf93;--warn:#f0b35c}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{display:flex;gap:24px;justify-content:center;align-items:flex-start;padding:20px 16px;flex-wrap:wrap}
+  .side{width:300px;max-width:100%}
+  .side h1{font-size:18px;margin:0 0 4px}
+  .side p{color:var(--mute);margin:0 0 12px;font-size:13px}
+  .nav button{display:flex;gap:8px;width:100%;text-align:left;padding:7px 10px;margin:0 0 4px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;cursor:pointer;font-size:13px}
+  .nav button.on{border-color:var(--acc);background:var(--acc2)}
+  .nav b{color:var(--mute);width:18px;display:inline-block}
+  .nav small{color:var(--mute);margin-left:auto}
+  details{margin-top:12px;font-size:12px;color:var(--mute)}
+  pre{white-space:pre-wrap;word-break:break-word;background:var(--card);border:1px solid var(--line);padding:8px;border-radius:8px;max-height:260px;overflow:auto;font-size:11px}
+  .phone{width:360px;max-width:100%;height:700px;background:var(--card);border:1px solid var(--line);border-radius:22px;box-shadow:0 8px 30px rgba(0,0,0,.12);display:flex;flex-direction:column;overflow:hidden}
+  .top{padding:10px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;font-weight:600}
+  .top .as{margin-left:auto;font-weight:400;font-size:12px;color:var(--mute)}
+  .body{padding:14px 16px;overflow:auto;flex:1}
+  h2{font-size:19px;margin:0 0 4px}
+  .sub{color:var(--mute);font-size:13px;margin:0 0 12px}
+  label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px}
+  input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font-size:15px}
+  .btn{display:block;width:100%;padding:12px;margin-top:12px;border:0;border-radius:12px;background:var(--acc);color:#fff;font-weight:600;font-size:15px;cursor:pointer;text-align:center;text-decoration:none}
+  .btn.sec{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+  .btn.sm{padding:8px;font-size:13px;margin-top:6px}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{padding:6px 10px;border:1px solid var(--line);border-radius:99px;background:var(--bg);color:var(--ink);cursor:pointer;font-size:13px}
+  .chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+  .card{border:1px solid var(--line);border-radius:14px;padding:12px;margin:0 0 10px;background:var(--bg)}
+  .card h3{margin:0;font-size:16px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .badge{font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--acc2);color:var(--acc)}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  .why{margin:6px 0;font-size:13px}
+  .trav{font-size:12px;color:var(--mute);margin:4px 0}
+  .trade{font-size:12px;color:var(--warn);margin:4px 0}
+  .ok{color:var(--ok)}.mute{color:var(--mute);font-size:13px}
+  .person{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;font-size:13px;max-width:90vw}
+  .stars button{font-size:22px;background:none;border:0;cursor:pointer;color:var(--line);padding:0 2px}
+  .stars button.on{color:#f0a500}
+  .note{background:var(--acc2);border-radius:10px;padding:8px 10px;font-size:12px;margin:8px 0}
+  .consent{font-size:11px;color:var(--mute);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="side">
+    <h1>Group Dining MVP</h1>
+    <p>Clickable prototype of the PRD's 10 screens. The fair-pick engine and vote/veto logic are the real code from <code>src/</code>. Restaurants are fictional sample data.</p>
+    <div class="nav" id="nav"></div>
+    <details><summary>What other browsers receive (budget secrecy check)</summary><pre id="payload">Generate picks first.</pre></details>
+    <details><summary>Plan log (A2)</summary><pre id="planlog">Nothing yet.</pre></details>
+  </div>
+  <div class="phone"><div class="top" id="top"></div><div class="body" id="body"></div></div>
+</div>
+<div id="toastHost"></div>
+
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const $ = (id) => document.getElementById(id);
+
+const SCREENS = [
+  ["signin", "Sign in", "Organiser"], ["profile", "Taste profile", "Organiser"], ["home", "Home", "Organiser"],
+  ["newplan", "New plan", "Organiser"], ["status", "Plan status", "Organiser"], ["picks", "Picks and vote", "Everyone"],
+  ["winner", "Winner", "Everyone"], ["friend", "Friend form", "Friend"], ["waiting", "Waiting", "Friend"], ["rating", "How was it?", "Everyone"],
+];
+const CUISINES = ["north-indian", "south-indian", "pan-asian", "italian", "continental", "street-food", "coastal", "vegan"];
+const MOODS = ["lively", "chill", "fancy", "quick", "quiet"];
+const DEMO = {
+  Riya: { area: "Koramangala", budget: 1400, mood: "lively", dealbreakers: [], cuisines: ["pan-asian"] },
+  Arjun: { area: "HSR Layout", budget: 1200, mood: "chill", dealbreakers: ["no-loud"], cuisines: ["north-indian"] },
+  Meera: { area: "Indiranagar", budget: 1000, mood: "lively", dealbreakers: [], cuisines: ["pan-asian", "italian"] },
+};
+
+const nextSat = () => { const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return d.toISOString().slice(0, 10); };
+
+const S = {
+  screen: "signin", phone: "", codeSent: false,
+  profile: { name: "Jenessa", cuisines: ["north-indian"], diet: "any", spice: "medium", budget: "800-1200", vibe: ["lively"], home: "Koramangala" },
+  plan: { date: nextSat(), time: "20:00", area: "anywhere", occasion: "Friends hangout", deadline: "2", friends: "Riya, Arjun, Meera", travelLimit: 40 },
+  shared: false, responses: {}, result: null, session: null, viewer: "Jenessa", winner: null, overridden: false,
+  friendDraft: { name: "", area: "Koramangala", budget: "", dealbreakers: [], mood: "chill" },
+  ratings: {}, log: [], rated: false,
+};
+const friends = () => S.plan.friends.split(",").map((s) => s.trim()).filter(Boolean);
+const members = () => ["Jenessa", ...friends()];
+const logEv = (type, payload = {}) => { S.log.push({ t: new Date().toISOString().slice(11, 19), type, ...payload }); };
+
+function toast(msg) {
+  const d = document.createElement("div"); d.className = "toast"; d.textContent = msg; $("toastHost").appendChild(d); setTimeout(() => d.remove(), 2600);
+}
+function go(screen) { S.screen = screen; render(); }
+
+function organiserMember() {
+  const p = S.profile;
+  return { name: "Jenessa", start: AREAS[p.home], budget: 1500, dealbreakers: p.diet === "veg" ? ["needs-veg"] : [], mood: p.vibe[0] || null, cuisines: p.cuisines, visited: [] };
+}
+function toMember(name, r) {
+  return { name, start: AREAS[r.area], budget: Number(r.budget) || null, dealbreakers: r.dealbreakers, mood: r.mood, cuisines: r.cuisines || [], visited: [] };
+}
+
+function runEngine() {
+  const answered = [organiserMember(), ...friends().filter((f) => S.responses[f]).map((f) => toMember(f, S.responses[f]))];
+  const unanswered = friends().filter((f) => !S.responses[f]).map((name) => ({ name }));
+  const pool = S.plan.area === "anywhere" ? RESTAURANTS : RESTAURANTS.filter((r) => r.area === S.plan.area);
+  S.result = generatePicks({ plan: { time: S.plan.time, travelLimitMin: Number(S.plan.travelLimit) }, members: answered, unanswered, restaurants: pool });
+  S.session = createSession(S.result, answered.map((m) => m.name));
+  S.winner = null; S.overridden = false; S.viewer = "Jenessa";
+  logEv("picks_generated", { trigger: unanswered.length ? "early" : "all answered", picks: S.result.picks.map((p) => p.id) });
+  go("picks");
+}
+
+function maybeDecide() {
+  if (S.winner) return;
+  if (isComplete(S.session)) {
+    S.winner = decide(S.session).winner; logEv("winner_decided", { id: S.winner && S.winner.id }); S.screen = "winner";
+  }
+}
+
+/* ---------- views ---------- */
+const V = {};
+V.signin = () => `<h2>Sign in</h2><p class="sub">Organisers only. Friends never sign in.</p>
+  <label>Phone number</label><input id="phone" inputmode="numeric" placeholder="+91 98xxxxxxxx" value="${esc(S.phone)}">
+  ${S.codeSent ? `<label>One-time code</label><input id="otp" inputmode="numeric" value="123456"><p class="mute">Prototype: any code works.</p><button class="btn" data-act="verify">Verify</button>`
+    : `<button class="btn" data-act="sendcode">Send code</button>`}`;
+
+V.profile = () => {
+  const p = S.profile;
+  return `<h2>Your taste</h2><p class="sub">6 quick questions. Skip any.</p>
+  <label>Cuisines you like</label><div class="chips">${CUISINES.map((c) => `<span class="chip ${p.cuisines.includes(c) ? "on" : ""}" data-act="pcuisine" data-v="${c}">${c}</span>`).join("")}</div>
+  <div class="row"><div><label>Diet</label><select data-bind="profile.diet">${["any", "veg", "vegan", "jain"].map((o) => `<option ${p.diet === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+  <div><label>Spice</label><select data-bind="profile.spice">${["mild", "medium", "hot"].map((o) => `<option ${p.spice === o ? "selected" : ""}>${o}</option>`).join("")}</select></div></div>
+  <div class="row"><div><label>Budget band</label><select data-bind="profile.budget">${["under 500", "500-800", "800-1200", "1200+"].map((o) => `<option ${p.budget === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+  <div><label>Home area</label><select data-bind="profile.home">${Object.keys(AREAS).map((o) => `<option ${p.home === o ? "selected" : ""}>${o}</option>`).join("")}</select></div></div>
+  <label>Vibe</label><div class="chips">${MOODS.map((c) => `<span class="chip ${p.vibe.includes(c) ? "on" : ""}" data-act="pvibe" data-v="${c}">${c}</span>`).join("")}</div>
+  <button class="btn" data-act="saveprofile">Save</button><button class="btn sec sm" data-act="saveprofile">Skip for now</button>`;
+};
+
+V.home = () => `<h2>Hi ${esc(S.profile.name)}</h2><p class="sub">What are we planning?</p>
+  <button class="btn" data-act="newplan">Plan with friends</button>
+  <button class="btn sec" disabled>Date night <span class="badge">P1</span></button>
+  <button class="btn sec" disabled>Find something new <span class="badge">P1</span></button>
+  <label>Active plans</label>${S.shared ? `<div class="card" data-act="toStatus" style="cursor:pointer"><b>${esc(S.plan.occasion)}</b><div class="mute">${esc(S.plan.date)} · ${esc(S.plan.time)} · ${friends().filter((f) => S.responses[f]).length}/${friends().length} answered</div></div>` : `<p class="mute">No active plans.</p>`}
+  <button class="btn sec sm" data-act="editprofile">Edit taste profile</button>`;
+
+V.newplan = () => {
+  const p = S.plan;
+  return `<h2>New plan</h2>
+  <div class="row"><div><label>Date</label><input type="date" data-bind="plan.date" value="${p.date}"></div><div><label>Time</label><input type="time" data-bind="plan.time" value="${p.time}"></div></div>
+  <label>Area</label><select data-bind="plan.area"><option value="anywhere" ${p.area === "anywhere" ? "selected" : ""}>Anywhere fair</option>${["Koramangala", "HSR Layout", "Indiranagar"].map((a) => `<option ${p.area === a ? "selected" : ""}>${a}</option>`).join("")}</select>
+  <div class="row"><div><label>Occasion</label><select data-bind="plan.occasion">${["Friends hangout", "Birthday", "Catch-up", "Celebration"].map((o) => `<option ${p.occasion === o ? "selected" : ""}>${o}</option>`).join("")}</select></div>
+  <div><label>Answer by</label><select data-bind="plan.deadline">${[["1", "1 hour"], ["2", "2 hours"], ["6", "6 hours"]].map(([v, l]) => `<option value="${v}" ${p.deadline === v ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
+  <label>Friends (first names)</label><input data-bind="plan.friends" value="${esc(p.friends)}">
+  <label>Max trip per person (min)</label><input type="number" min="10" max="90" data-bind="plan.travelLimit" value="${p.travelLimit}">
+  <button class="btn" data-act="shareplan">Share on WhatsApp</button>`;
+};
+
+const waText = () => `Dinner plan: ${S.plan.occasion}, ${S.plan.date} at ${S.plan.time}. Takes 30 seconds, no sign-in, your budget stays private: https://example.com/p/abc123`;
+
+V.status = () => {
+  const fr = friends();
+  const n = fr.filter((f) => S.responses[f]).length;
+  return `<h2>${esc(S.plan.occasion)}</h2><p class="sub">${esc(S.plan.date)} · ${esc(S.plan.time)} · closes in ${S.plan.deadline}h</p>
+  ${S.shared ? `<div class="note"><b>Shared message:</b> ${esc(waText())}</div>` : ""}
+  <div class="person"><span>Jenessa (you)</span><span class="ok">✓ answered</span></div>
+  ${fr.map((f) => `<div class="person"><span>${esc(f)}</span>${S.responses[f] ? `<span class="ok">✓ answered</span>` : `<span class="mute">waiting…</span>`}</div>`).join("")}
+  <p class="mute">You see who has answered, never what they said.</p>
+  <button class="btn" data-act="getpicks" ${n >= 2 ? "" : "disabled"}>${n === fr.length ? "Get picks" : "Get picks now (" + n + " of " + fr.length + ")"}</button>
+  ${n < 2 ? `<p class="mute">Needs 2+ friends to answer.</p>` : ""}
+  <button class="btn sec sm" data-act="openfriend">Open friend form as a friend</button>
+  <button class="btn sec sm" data-act="fillall">Demo: fill all friend answers</button>
+  <a class="btn sec sm" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(waText())}">Share again on WhatsApp</a>`;
+};
+
+V.friend = () => {
+  const d = S.friendDraft; const dbs = [["needs-veg", "Need veg options"], ["needs-vegan", "Need vegan"], ["needs-jain", "Need Jain"], ["no-alcohol", "No bar-led places"], ["no-loud", "Too loud"]];
+  return `<h2>${esc(S.profile.name)} invited you</h2><p class="sub">${esc(S.plan.occasion)} · ${esc(S.plan.date)} · 30 seconds</p>
+  <label>Your first name</label><select data-bind="friendDraft.name"><option value="">Choose…</option>${friends().filter((f) => !S.responses[f]).map((f) => `<option ${d.name === f ? "selected" : ""}>${esc(f)}</option>`).join("")}</select>
+  <label>Where will you start from?</label><select data-bind="friendDraft.area">${Object.keys(AREAS).map((a) => `<option ${d.area === a ? "selected" : ""}>${a}</option>`).join("")}</select>
+  <label>Your max per person (private)</label><input type="number" inputmode="numeric" placeholder="e.g. 1000" data-bind="friendDraft.budget" value="${esc(d.budget)}"><div class="mute">Only the picker sees this. Nobody else ever does.</div>
+  <label>Dealbreakers</label><div class="chips">${dbs.map(([k, l]) => `<span class="chip ${d.dealbreakers.includes(k) ? "on" : ""}" data-act="fdb" data-v="${k}">${l}</span>`).join("")}</div>
+  <label>Mood</label><div class="chips">${MOODS.map((m) => `<span class="chip ${d.mood === m ? "on" : ""}" data-act="fmood" data-v="${m}">${m}</span>`).join("")}</div>
+  <button class="btn" data-act="submitfriend">Submit</button>
+  <div class="consent">By submitting you agree we use your answers only to plan this outing. They are deleted 90 days after the plan.</div>`;
+};
+
+V.waiting = () => `<h2>Thanks, ${esc(S.friendDraft.name || "friend")}!</h2><p class="sub">Picks arrive when everyone answers or at ${esc(S.plan.time)} - ${esc(S.plan.deadline)}h deadline.</p>
+  <div class="note">You'll get the link back on WhatsApp.</div>
+  <button class="btn sec" data-act="backorg">Back to organiser view</button>`;
+
+const money = (n) => "₹" + n.toLocaleString("en-IN");
+
+V.picks = () => {
+  const s = S.session, r = S.result;
+  if (!r.picks.length && !r.nearMisses.length) return `<h2>No picks</h2><p class="sub">Nothing fits everyone. Try a longer trip limit.</p><button class="btn" data-act="backstatus">Back</button>`;
+  const voted = Object.keys(s.votes).length, total = s.members.length;
+  const done = !!s.votes[S.viewer], usedVeto = S.viewer in s.vetoes;
+  const prices = s.shown.map((p) => p.pricePerHead);
+  return `<h2>Pick one</h2><p class="sub">${voted}/${total} voted · each person gets one vote and one veto</p>
+  <label style="margin-top:0">Demo: voting as</label><select data-bind="viewer">${s.members.map((m) => `<option ${S.viewer === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select>
+  ${prices.length ? `<div class="note">${money(Math.min(...prices))}-${money(Math.max(...prices))} a head works for all</div>` : ""}
+  ${r.notes.filter((n) => !n.startsWith("Travel")).map((n) => `<div class="note">${esc(n)}</div>`).join("")}
+  ${r.travelFallback ? `<div class="note">Travel times are straight-line estimates</div>` : ""}
+  ${s.shown.map((p) => `<div class="card"><h3>${esc(p.name)}${p.partner ? ` <span class="badge">Partner</span>` : ""}</h3>
+    <div class="mute">${esc(p.area)} · ${money(p.pricePerHead)} a head</div>
+    <div class="why">${esc(p.reason)}</div>
+    <div class="trav">${p.travel.map((t) => `${esc(t.name)} ${t.minutes} min`).join(" · ")}</div>
+    ${p.tradeoffs.map((t) => `<div class="trade">${esc(t)}</div>`).join("")}
+    <div class="row"><button class="btn sm" data-act="vote" data-v="${p.id}" ${done ? "disabled" : ""}>${s.votes[S.viewer] === p.id ? "Voted ✓" : "Vote"}</button>
+    <button class="btn sm sec" data-act="veto" data-v="${p.id}" ${usedVeto ? "disabled" : ""}>Veto</button></div></div>`).join("")}
+  ${r.nearMisses.length ? `<label>Nearest misses</label>${r.nearMisses.map((m) => `<div class="card"><b>${esc(m.name)}</b> <span class="mute">${esc(m.area)}</span>${m.broken.map((b) => `<div class="trade">${esc(b.detail)}</div>`).join("")}</div>`).join("")}` : ""}
+  <button class="btn sec sm" data-act="closevote">Organiser: close voting now (deadline)</button>
+  ${S.viewer === "Jenessa" ? `<details><summary class="mute">Override result (logged)</summary>${[...s.shown, ...s.reserve].slice(0, 5).map((p) => `<button class="btn sec sm" data-act="override" data-v="${p.id}">Choose ${esc(p.name)}</button>`).join("")}</details>` : ""}`;
+};
+
+V.winner = () => {
+  const w = S.winner;
+  if (!w) return `<h2>No winner</h2>`;
+  const rest = RESTAURANTS.find((r) => r.id === w.id);
+  const msg = `We're going to ${w.name} (${w.area}), ${S.plan.date} at ${S.plan.time}. ${w.reason}`;
+  return `<h2>It's ${esc(w.name)}!</h2><p class="sub">${esc(w.area)} · ${money(w.pricePerHead)} a head${S.overridden ? " · organiser's choice" : ""}</p>
+  <div class="card"><div class="why">${esc(w.reason)}</div><div class="trav">${w.travel.map((t) => `${esc(t.name)} ${t.minutes} min`).join(" · ")}</div>${w.partner ? `<span class="badge">Partner</span>` : ""}</div>
+  <a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg)}">Share to WhatsApp</a>
+  <div class="row"><button class="btn sec sm" data-act="call">Call</button>
+  <a class="btn sec sm" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${rest.lat},${rest.lng}">Directions</a>
+  <button class="btn sec sm" data-act="book">Booking app</button></div>
+  <button class="btn sec" data-act="torating">Next day: How was it?</button>
+  <p class="mute">Closed or changed? <a href="#" data-act="report" style="color:var(--acc)">Tell us</a></p>`;
+};
+
+V.rating = () => {
+  const names = S.session ? S.session.members : members();
+  const w = S.winner;
+  if (S.rated) {
+    const went = Object.values(S.ratings).filter((r) => r.went === "yes").length;
+    const rs = Object.values(S.ratings).map((r) => r.stars).filter(Boolean);
+    return `<h2>Thanks!</h2><p class="sub">Stored against the plan and fed to the metrics.</p>
+    <div class="card">Visit rate: <b>${Math.round((went / Math.max(1, names.length)) * 100)}%</b> went<br>Pick satisfaction: <b>${rs.length ? (rs.reduce((a, b) => a + b, 0) / rs.length).toFixed(1) : "-"}</b> / 5</div>
+    <button class="btn" data-act="restart">Start another plan</button>`;
+  }
+  return `<h2>How was it?</h2><p class="sub">${w ? esc(w.name) : "Your plan"} · tap to answer</p>
+  ${names.map((n) => { const r = S.ratings[n] || {}; return `<div class="card"><b>${esc(n)}</b>
+    <div class="chips" style="margin:6px 0">${[["yes", "Went"], ["no", "Didn't go"], ["elsewhere", "Went elsewhere"]].map(([k, l]) => `<span class="chip ${r.went === k ? "on" : ""}" data-act="went" data-n="${esc(n)}" data-v="${k}">${l}</span>`).join("")}</div>
+    <div class="stars">${[1, 2, 3, 4, 5].map((i) => `<button class="${(r.stars || 0) >= i ? "on" : ""}" data-act="star" data-n="${esc(n)}" data-v="${i}" aria-label="${i} stars">★</button>`).join("")}</div></div>`; }).join("")}
+  <button class="btn" data-act="submitrating">Submit</button>`;
+};
+
+/* ---------- render ---------- */
+function render() {
+  const idx = SCREENS.findIndex((s) => s[0] === S.screen);
+  $("nav").innerHTML = SCREENS.map((s, i) => `<button class="${s[0] === S.screen ? "on" : ""}" data-act="nav" data-v="${s[0]}"><b>${i + 1}</b>${s[1]}<small>${s[2]}</small></button>`).join("");
+  $("top").innerHTML = `<span>${idx + 1}. ${SCREENS[idx][1]}</span><span class="as">${SCREENS[idx][2]}</span>`;
+  const keepScroll = $("body").scrollTop;
+  $("body").innerHTML = V[S.screen]();
+  $("body").scrollTop = keepScroll;
+  $("payload").textContent = S.result ? JSON.stringify({ picks: S.result.picks, reserve: S.result.reserve.slice(0, 2) }, null, 1) : "Generate picks first.";
+  $("planlog").textContent = S.result ? JSON.stringify({ engine: S.result.log, events: S.log }, null, 1) : "Nothing yet.";
+}
+
+function setPath(path, value) {
+  const parts = path.split("."); let o = S;
+  while (parts.length > 1) o = o[parts.shift()];
+  o[parts[0]] = value;
+}
+
+document.addEventListener("input", (e) => { const b = e.target.dataset && e.target.dataset.bind; if (b && e.target.tagName === "INPUT") setPath(b, e.target.value); if (e.target.id === "phone") S.phone = e.target.value; });
+document.addEventListener("change", (e) => { const b = e.target.dataset && e.target.dataset.bind; if (b && e.target.tagName === "SELECT") { setPath(b, e.target.value); if (b === "viewer" || b === "friendDraft.name") render(); } });
+
+const toggle = (arr, v) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]"); if (!el || el.disabled) return;
+  const act = el.dataset.act, v = el.dataset.v, n = el.dataset.n;
+  if (act === "report") e.preventDefault();
+  try {
+    switch (act) {
+      case "nav": go(v); return;
+      case "sendcode": S.codeSent = true; return render();
+      case "verify": return go("profile");
+      case "pcuisine": S.profile.cuisines = toggle(S.profile.cuisines, v); return render();
+      case "pvibe": S.profile.vibe = toggle(S.profile.vibe, v); return render();
+      case "saveprofile": logEv("profile_completed"); return go("home");
+      case "editprofile": return go("profile");
+      case "newplan": return go("newplan");
+      case "shareplan": S.shared = true; S.responses = {}; S.result = null; S.session = null; logEv("plan_created"); logEv("plan_shared"); window.open("https://wa.me/?text=" + encodeURIComponent(waText()), "_blank", "noopener"); return go("status");
+      case "toStatus": return go("status");
+      case "openfriend": S.friendDraft = { name: "", area: "Koramangala", budget: "", dealbreakers: [], mood: "chill" }; logEv("link_opened"); return go("friend");
+      case "fdb": S.friendDraft.dealbreakers = toggle(S.friendDraft.dealbreakers, v); return render();
+      case "fmood": S.friendDraft.mood = v; return render();
+      case "submitfriend": {
+        const d = S.friendDraft;
+        if (!d.name) return toast("Choose your name first");
+        S.responses[d.name] = { area: d.area, budget: d.budget, dealbreakers: d.dealbreakers, mood: d.mood, cuisines: [] };
+        logEv("response_submitted", { name: d.name }); return go("waiting");
+      }
+      case "backorg": return go("status");
+      case "fillall": friends().forEach((f) => { S.responses[f] = DEMO[f] || { area: "Koramangala", budget: 1000, mood: "chill", dealbreakers: [], cuisines: [] }; }); return render();
+      case "getpicks": return runEngine();
+      case "backstatus": return go("status");
+      case "vote": S.session = vote(S.session, S.viewer, v); maybeDecide(); return render();
+      case "veto": S.session = veto(S.session, S.viewer, v); logEv("pick_vetoed", { by: S.viewer, id: v }); return render();
+      case "closevote": S.winner = decide(S.session).winner; logEv("winner_decided", { id: S.winner && S.winner.id, trigger: "deadline" }); return go("winner");
+      case "override": { const o = override(S.session, "Jenessa", v); S.session = o.session; S.winner = o.winner; S.overridden = true; logEv("organiser_override", { id: v }); return go("winner"); }
+      case "call": return toast("Sample data has no phone numbers. Real build opens tel: link.");
+      case "book": return toast("Booking-app deep links are an open question in the PRD.");
+      case "report": return toast("Thanks, flagged for the weekly curation review.");
+      case "torating": S.rated = false; S.ratings = {}; return go("rating");
+      case "went": S.ratings[n] = { ...(S.ratings[n] || {}), went: v }; return render();
+      case "star": S.ratings[n] = { ...(S.ratings[n] || {}), stars: Number(v) }; return render();
+      case "submitrating": S.rated = true; logEv("visit_reported"); logEv("rating_submitted", { ratings: S.ratings }); return render();
+      case "restart": S.shared = false; S.responses = {}; S.result = null; S.session = null; S.winner = null; S.rated = false; return go("home");
+    }
+  } catch (err) { toast(err.message); }
+});
+
+render();
+</script>
+</body>
+</html>

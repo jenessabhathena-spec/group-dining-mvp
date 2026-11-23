@@ -1,0 +1,11 @@
+# Keep secrets, data and dev files out of the image.
+*.sqlite
+*.sqlite-*
+deploy/.env
+deploy/restaurants.csv
+.env
+node_modules
+test
+prototype
+.git
+*.log

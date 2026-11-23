@@ -1,0 +1,7 @@
+# HTTPS in front of the app. Caddy obtains and renews the certificate for $DOMAIN by itself and redirects
+# http to https. Caddy's access log is left OFF on purpose: it records full URLs, and query strings can contain
+# what people type in the start-point search. The app logs method, path and status only.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:3000
+}
