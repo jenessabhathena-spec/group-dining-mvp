@@ -1,5 +1,7 @@
 # Group Dining MVP: engine, backend, prototype
 
+**Live prototype:** https://jenessabhathena-spec.github.io/group-dining-mvp/ (the clickable 10-screen demo on GitHub Pages, fictional restaurants, runs entirely in the browser). The real app with sign-in, friends' links and SMS needs a server: see DEPLOY.md.
+
 Built from `PRD - Group Dining Decision App (MVP, Bengaluru).pdf`. Node 22.13+ (tested on 24), **no npm dependencies** (uses built-in `node:sqlite`).
 
 ## Deploy
